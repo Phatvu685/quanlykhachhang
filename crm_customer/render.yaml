@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     rootDir: customer-crm-backend
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npx prisma db push --skip-generate && node prisma/seed-runtime.js && npm run start:prod
     healthCheckPath: /api/health
     envVars:
@@ -31,8 +31,8 @@ services:
     region: singapore
     plan: free
     rootDir: customer-crm-nextjs
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npx next start -p $PORT
     envVars:
       - key: NODE_VERSION
         value: 20.18.0
