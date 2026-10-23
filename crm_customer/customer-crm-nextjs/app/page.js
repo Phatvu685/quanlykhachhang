@@ -14,8 +14,14 @@ export default function Page() {
   const [xlsxReady, setXlsxReady] = useState(false);
   const [apiReady, setApiReady] = useState(false);
 
+  const serverBase =
+    typeof window !== "undefined"
+      ? window.__SERVER_API_BASE__ || window.__API_BASE__
+      : "";
   const rawApiBase = (
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001/api"
+    serverBase ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:3001/api"
   )
     .trim()
     .replace(/\/$/, "");

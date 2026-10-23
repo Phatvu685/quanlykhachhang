@@ -29,15 +29,33 @@ async function bootstrap() {
     }),
   );
 
-  // ---- CORS: cho phép frontend (Next.js chạy ở domain/port khác) gọi API này ----
-  const corsOrigin =
-    config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000';
+  // ---- CORS: cho phép frontend gọi API an toàn trên Render và localhost ----
+  const corsOrigin = config.get<string>('CORS_ORIGIN') ?? '';
+  const allowedOrigins = corsOrigin
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   app.enableCors({
-    origin: corsOrigin.split(',').map((s) => s.trim()), // hỗ trợ nhiều domain, cách nhau dấu phẩy trong .env
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/$/, '');
+      if (
+        allowedOrigins.length === 0 ||
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith('.onrender.com') ||
+        cleanOrigin.includes('localhost') ||
+        cleanOrigin.includes('127.0.0.1')
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   });
 
-  const port = config.get<number>('PORT') ?? 3001;
+  const port = Number(config.get('PORT')) || 3001;
   await app.listen(port, '0.0.0.0');
 
   Logger.log(

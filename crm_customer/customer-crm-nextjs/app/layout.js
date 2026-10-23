@@ -9,8 +9,31 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const envApiBase = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.API_BASE_URL ||
+    ""
+  ).trim();
+
+  let formattedApiBase = "";
+  if (envApiBase) {
+    const withoutTrailingSlash = envApiBase.replace(/\/+$/, "");
+    formattedApiBase = withoutTrailingSlash.endsWith("/api")
+      ? withoutTrailingSlash
+      : withoutTrailingSlash + "/api";
+  }
+
   return (
     <html lang="vi" suppressHydrationWarning={true}>
+      <head>
+        {formattedApiBase ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.__SERVER_API_BASE__ = ${JSON.stringify(envApiBase)}; window.__API_BASE__ = ${JSON.stringify(formattedApiBase)};`,
+            }}
+          />
+        ) : null}
+      </head>
       <body suppressHydrationWarning={true}>{children}</body>
     </html>
   );
