@@ -1,0 +1,242 @@
+// ============================================================================
+// PRISMA SCHEMA
+// Đây là "bản thiết kế" toàn bộ database. Prisma sẽ đọc file này để:
+//  1. Sinh ra Prisma Client (thư viện TypeScript giúp query DB an toàn kiểu dữ liệu)
+//  2. Sinh ra migration (câu lệnh SQL) để tạo bảng thật trên Postgres (Neon)
+// Chạy "npx prisma migrate dev" mỗi khi sửa file này để đồng bộ DB.
+// ============================================================================
+
+// generator: khai báo Prisma sẽ sinh ra "Prisma Client" (đoạn code TS để gọi DB)
+generator client {
+  provider = "prisma-client-js"
+}
+
+// datasource: khai báo loại DB (postgresql) và nơi lấy chuỗi kết nối (biến môi trường DATABASE_URL)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUM: các tập giá trị cố định, giúp tránh gõ sai chuỗi tự do ở tầng code lẫn DB.
+// ----------------------------------------------------------------------------
+
+// Vai trò tài khoản đăng nhập hệ thống
+enum Role {
+  admin // Toàn quyền: xem/sửa tất cả nhân viên, cấu hình combo/sản phẩm...
+  staff // Nhân viên: chỉ thao tác trên khách hàng do mình phụ trách
+}
+
+// Loại khách hàng
+enum CustomerType {
+  moi // Khách mới
+  cu // Khách cũ
+  tiemnang // Khách tiềm năng
+}
+
+// Giai đoạn khách hàng đang ở trong phễu bán hàng
+enum CustomerStage {
+  order // Đang là đơn hàng / khách hàng chính thức
+  cskh // Đang chăm sóc khách hàng (chưa chốt đơn)
+}
+
+// Trạng thái thanh toán của 1 đơn hàng
+enum PaymentStatus {
+  da_tra // Đã trả tiền
+  chua_tra // Chưa trả (còn công nợ)
+}
+
+// Loại phiếu kho
+enum StockType {
+  nhap // Nhập kho (mua hàng về)
+  xuat // Xuất kho (bán / tặng cho khách)
+}
+
+// Loại khoản mục trong sổ dòng tiền (Cashflow)
+enum ExpenseKind {
+  chi_phi // Chi phí bán hàng (vd: tiền nhập hàng, ship...)
+  von // Vốn góp của thành viên
+  hoan_von // Hoàn vốn lại cho thành viên
+}
+
+// Loại ưu đãi áp dụng cho Combo
+enum OfferType {
+  percent // Giảm theo phần trăm
+  money // Giảm trừ theo số tiền cố định
+  kg // Tặng thêm số kg/đơn vị, giữ nguyên giá
+}
+
+// ----------------------------------------------------------------------------
+// MODEL: mỗi model tương ứng 1 bảng trong Postgres.
+// ----------------------------------------------------------------------------
+
+// Tài khoản ĐĂNG NHẬP hệ thống (admin + 4 nhân viên trong bản gốc).
+// Khác với "SocialAccount" bên dưới (tài khoản mạng xã hội để chăm sóc khách hàng).
+model User {
+  id           Int      @id @default(autoincrement()) // khoá chính, tự tăng
+  username     String   @unique // đăng nhập không được trùng username
+  passwordHash String // mật khẩu đã băm bằng bcrypt, KHÔNG lưu plaintext
+  role         Role     @default(staff)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 1 user (nhân viên) có thể được gán phụ trách nhiều khách hàng
+  customers Customer[]
+
+  @@map("users") // tên bảng thật trong Postgres là "users" (chữ thường, chuẩn quy ước SQL)
+}
+
+// Sản phẩm trong kho (vd: Gạo ST25, Gạo Nàng Hoa...)
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  unit      String   @default("kg") // đơn vị tính: kg, bao, thùng...
+  minStock  Int      @default(0) // định mức tồn kho tối thiểu để cảnh báo
+  sellPrice Decimal  @default(0) @db.Decimal(14, 2) // giá bán tham khảo
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Quan hệ ngược: sản phẩm này xuất hiện trong các phiếu kho nào,
+  // các combo nào lấy nó làm sản phẩm chính, khách hàng nào mua nó...
+  stockEntries    StockEntry[]
+  combosAsMain    Combo[]      @relation("ComboMainProduct")
+  combosAsGift    Combo[]      @relation("ComboGiftProduct")
+  customersMain   Customer[]   @relation("CustomerMainProduct")
+  customersGift   Customer[]   @relation("CustomerGiftProduct")
+
+  @@map("products")
+}
+
+// Combo bán hàng (gói khuyến mãi gắn với 1 sản phẩm chính, có thể kèm quà tặng)
+model Combo {
+  id            Int       @id @default(autoincrement())
+  name          String
+  desc          String?   @db.Text
+  product       Product?  @relation("ComboMainProduct", fields: [productId], references: [id], onDelete: SetNull)
+  productId     Int?
+  productName   String? // lưu lại tên SP tại thời điểm tạo combo, phòng khi SP bị xoá
+  unit          String    @default("kg")
+  baseKg        Decimal   @default(0) @db.Decimal(12, 2) // số lượng gốc trong combo
+  unitPrice     Decimal   @default(0) @db.Decimal(14, 2) // đơn giá / đơn vị
+  offerType     OfferType @default(percent)
+  offerValue    Decimal   @default(0) @db.Decimal(14, 2) // giá trị ưu đãi (theo offerType)
+  giftProduct   Product?  @relation("ComboGiftProduct", fields: [giftProductId], references: [id], onDelete: SetNull)
+  giftProductId Int?
+  giftQty       Decimal   @default(0) @db.Decimal(12, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customers Customer[] // các khách hàng đang áp dụng combo này
+
+  @@map("combos")
+}
+
+// Khách hàng — bảng trung tâm của toàn bộ app (đơn hàng + CSKH dùng chung 1 bảng,
+// phân biệt nhau qua cột "stage", giống hệt logic gốc trên frontend).
+model Customer {
+  id      Int           @id @default(autoincrement())
+  name    String
+  phone   String
+  address String?
+  type    CustomerType  @default(moi)
+  note    String?       @db.Text
+
+  kg    Decimal @default(0) @db.Decimal(12, 2) // số kg/khối lượng đã mua
+  price Decimal @default(0) @db.Decimal(14, 2) // giá trị đơn hàng (VNĐ)
+
+  combo   Combo? @relation(fields: [comboId], references: [id], onDelete: SetNull)
+  comboId Int?
+
+  // Nhân viên phụ trách (liên kết tới bảng User) — có thể để trống (chưa phân công)
+  staffUser   User?  @relation(fields: [staffUserId], references: [id], onDelete: SetNull)
+  staffUserId Int?
+
+  // Sản phẩm chính khách mua + phiếu xuất kho tương ứng (được đồng bộ tự động,
+  // xem CustomersService.syncMainStockEntry — port lại từ syncCustomerStockEntry gốc)
+  product        Product?    @relation("CustomerMainProduct", fields: [productId], references: [id], onDelete: SetNull)
+  productId      Int?
+  stockEntry     StockEntry? @relation("CustomerMainStockEntry", fields: [stockEntryId], references: [id], onDelete: SetNull)
+  stockEntryId   Int?        @unique
+
+  // Sản phẩm quà tặng kèm (nếu combo có cấu hình) + phiếu xuất kho quà tặng tương ứng
+  giftProduct     Product?    @relation("CustomerGiftProduct", fields: [giftProductId], references: [id], onDelete: SetNull)
+  giftProductId   Int?
+  giftStockEntry  StockEntry? @relation("CustomerGiftStockEntry", fields: [giftStockEntryId], references: [id], onDelete: SetNull)
+  giftStockEntryId Int?       @unique
+
+  stage         CustomerStage @default(order)
+  paymentStatus PaymentStatus @default(da_tra)
+  packed        Boolean       @default(false) // đã đóng gói
+  delivered     Boolean       @default(false) // đã giao hàng
+
+  acquiredDate    String? // ngày tiếp cận/thu hút khách (lưu dạng "yyyy-mm-dd" giống frontend gốc)
+  lastOrderDate   String? // ngày đặt đơn gần nhất
+  deliveryDate    String? // ngày giao hàng
+  nextContactDate String? // ngày hẹn liên hệ lại (dùng cho CSKH)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customers")
+  @@index([stage])
+  @@index([staffUserId])
+}
+
+// Tài khoản MẠNG XÃ HỘI dùng để chăm sóc khách hàng (Zalo, Facebook...) — mục "Tài khoản" trên UI gốc.
+model SocialAccount {
+  id        Int      @id @default(autoincrement())
+  resource  String // tên nền tảng: Zalo, Facebook, TikTok...
+  username  String
+  password  String // ghi chú: đây là mật khẩu của tài khoản MXH (do người dùng tự quản lý), không phải mật khẩu đăng nhập hệ thống
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("social_accounts")
+}
+
+// Phiếu kho: nhập hoặc xuất. Xuất kho có thể được tạo tự động khi bán hàng cho khách (2 chiều đồng bộ).
+model StockEntry {
+  id         Int       @id @default(autoincrement())
+  type       StockType
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId  Int
+  qty        Decimal   @default(0) @db.Decimal(12, 2)
+  unitPrice  Decimal   @default(0) @db.Decimal(14, 2)
+  supplier   String?
+  date       String? // "yyyy-mm-dd", giữ dạng string cho khớp UI gốc
+  note       String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // 1 phiếu NHẬP có giá trị (>0) sẽ tự sinh 1 khoản Expense "chi_phi" tương ứng (1-1).
+  // Đây chỉ là quan hệ ngược (back-relation) — khoá ngoại thật sự nằm bên Expense.stockEntryId.
+  expense Expense?
+
+  // các khách hàng tham chiếu ngược tới phiếu này (SP chính hoặc quà tặng)
+  customerAsMain Customer? @relation("CustomerMainStockEntry")
+  customerAsGift Customer? @relation("CustomerGiftStockEntry")
+
+  @@map("stock_entries")
+  @@index([productId])
+}
+
+// Sổ dòng tiền: chi phí / vốn / hoàn vốn. Doanh thu & công nợ KHÔNG lưu ở đây —
+// chúng được tính động (aggregate) từ bảng Customer, giống hệt logic renderCashflow() gốc.
+model Expense {
+  id         Int         @id @default(autoincrement())
+  kind       ExpenseKind
+  name       String
+  amount     Decimal     @default(0) @db.Decimal(14, 2)
+  date       String?
+  note       String?     @db.Text
+  autoStock  Boolean     @default(false) // true nếu khoản này được HỆ THỐNG tự sinh từ phiếu nhập kho (không cho sửa tay)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // liên kết ngược tới phiếu kho đã sinh ra khoản chi phí này (nếu autoStock = true)
+  stockEntry StockEntry? @relation(fields: [stockEntryId], references: [id], onDelete: Cascade)
+  stockEntryId Int?      @unique
+
+  @@map("expenses")
+}

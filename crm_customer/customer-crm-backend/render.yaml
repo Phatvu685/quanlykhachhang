@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: customer-crm-backend
+    env: docker
+    branch: main
+    plan: free
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production

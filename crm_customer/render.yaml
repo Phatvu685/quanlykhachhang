@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: customer-crm-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./customer-crm-backend/Dockerfile
+    dockerContext: ./customer-crm-backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 12h
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: customer-crm-web
+          envVarKey: RENDER_EXTERNAL_URL
+
+  - type: web
+    name: customer-crm-web
+    runtime: docker
+    plan: free
+    dockerfilePath: ./customer-crm-nextjs/Dockerfile
+    dockerContext: ./customer-crm-nextjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: customer-crm-backend
+          envVarKey: RENDER_EXTERNAL_URL
