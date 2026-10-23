@@ -5,7 +5,12 @@
 
 // Injectable: đánh dấu class này là 1 provider mà NestJS có thể quản lý vòng đời
 // OnModuleInit / OnModuleDestroy: 2 lifecycle hook để tự kết nối/ngắt kết nối DB
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 // PrismaClient: client TypeScript được Prisma tự sinh ra dựa theo schema.prisma
 import { PrismaClient } from '@prisma/client';
 

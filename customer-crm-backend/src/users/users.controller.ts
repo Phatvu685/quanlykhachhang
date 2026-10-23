@@ -56,7 +56,10 @@ export class UsersController {
   }
 
   @Patch(':id') // PATCH /users/:id
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserDto,
+  ) {
     return this.usersService.update(id, dto);
   }
 

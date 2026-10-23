@@ -6,7 +6,11 @@
 //  - getLedger(): gộp cả doanh thu/công nợ (tính động từ Customer) + expenses
 //    thành 1 sổ cái duy nhất, giống bảng "Dòng tiền" hiển thị trên UI gốc.
 // ============================================================================
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
@@ -21,7 +25,8 @@ export class ExpensesService {
 
   async findOne(id: number) {
     const expense = await this.prisma.expense.findUnique({ where: { id } });
-    if (!expense) throw new NotFoundException(`Không tìm thấy khoản mục id=${id}`);
+    if (!expense)
+      throw new NotFoundException(`Không tìm thấy khoản mục id=${id}`);
     return expense;
   }
 
@@ -130,7 +135,7 @@ export class ExpensesService {
       name: c.name,
       amount: Number(c.price),
       date: c.lastOrderDate || c.acquiredDate || '',
-      note: Number(c.kg) ? `${c.kg} kg — đã thu` : 'đã thu',
+      note: Number(c.kg) ? `${Number(c.kg)} kg — đã thu` : 'đã thu',
     }));
 
     const debtEntries = debtCustomers.map((c) => ({
@@ -139,7 +144,7 @@ export class ExpensesService {
       name: c.name,
       amount: Number(c.price),
       date: c.lastOrderDate || c.acquiredDate || '',
-      note: Number(c.kg) ? `${c.kg} kg — công nợ` : 'công nợ',
+      note: Number(c.kg) ? `${Number(c.kg)} kg — công nợ` : 'công nợ',
       custId: c.id,
     }));
 
@@ -155,10 +160,12 @@ export class ExpensesService {
 
     // Gộp 3 mảng rồi sắp xếp giảm dần theo ngày (chuỗi "yyyy-mm-dd" nên so sánh
     // bằng localeCompare vẫn cho đúng thứ tự thời gian). Dòng không có ngày bị đẩy xuống cuối.
-    return [...revenueEntries, ...debtEntries, ...expenseEntries].sort((a, b) => {
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return b.date.localeCompare(a.date);
-    });
+    return [...revenueEntries, ...debtEntries, ...expenseEntries].sort(
+      (a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return b.date.localeCompare(a.date);
+      },
+    );
   }
 }

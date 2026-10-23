@@ -1,5 +1,13 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -44,7 +52,10 @@ export class ExpensesController {
 
   @Patch(':id')
   @Roles('admin')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExpenseDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateExpenseDto,
+  ) {
     return this.expensesService.update(id, dto);
   }
 

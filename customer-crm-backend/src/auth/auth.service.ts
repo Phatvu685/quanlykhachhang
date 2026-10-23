@@ -2,7 +2,11 @@
 // AuthService: xử lý logic đăng nhập — kiểm tra username/password, nếu đúng
 // thì ký (sign) và trả về JWT access token.
 // ============================================================================
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -18,7 +22,9 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     // 1. Tìm user theo username (kèm passwordHash, vì cần so sánh mật khẩu)
-    const user = await this.usersService.findByUsernameWithPassword(dto.username);
+    const user = await this.usersService.findByUsernameWithPassword(
+      dto.username,
+    );
 
     // 2. Nếu không tìm thấy user -> báo lỗi chung chung "sai tài khoản/mật khẩu"
     //    (KHÔNG nói rõ "user không tồn tại" để tránh lộ thông tin cho kẻ dò username)
@@ -34,7 +40,11 @@ export class AuthService {
     }
 
     // 4. Tạo payload gọn nhẹ để nhúng vào token (KHÔNG nhét passwordHash vào đây)
-    const payload = { userId: user.id, username: user.username, role: user.role };
+    const payload = {
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+    };
 
     // 5. jwtService.signAsync ký token bằng JWT_SECRET + JWT_EXPIRES_IN
     //    (cấu hình toàn cục trong AuthModule bên dưới)
@@ -56,7 +66,9 @@ export class AuthService {
   // giống hệt hành vi bản gốc (đăng ký xong quay lại form login với username đã điền sẵn).
   // ==========================================================================
   async register(dto: RegisterDto) {
-    const existed = await this.usersService.findByUsernameWithPassword(dto.username);
+    const existed = await this.usersService.findByUsernameWithPassword(
+      dto.username,
+    );
     if (existed) {
       throw new ConflictException('Tên đăng nhập này đã tồn tại');
     }
@@ -67,7 +79,11 @@ export class AuthService {
       role: 'staff', // ép cứng, KHÔNG đọc role từ client
     });
 
-    const payload = { userId: created.id, username: created.username, role: created.role };
+    const payload = {
+      userId: created.id,
+      username: created.username,
+      role: created.role,
+    };
     const accessToken = await this.jwtService.signAsync(payload);
 
     return { accessToken, user: created };

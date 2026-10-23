@@ -33,8 +33,12 @@ export class ProductsService {
       where: { id },
       include: { stockEntries: true },
     });
-    if (!product) throw new NotFoundException(`Không tìm thấy sản phẩm id=${id}`);
-    return { ...product, currentStock: this.calcCurrentStock(product.stockEntries) };
+    if (!product)
+      throw new NotFoundException(`Không tìm thấy sản phẩm id=${id}`);
+    return {
+      ...product,
+      currentStock: this.calcCurrentStock(product.stockEntries),
+    };
   }
 
   async create(dto: CreateProductDto) {

@@ -16,6 +16,7 @@ import { CustomersModule } from './customers/customers.module';
 import { StockEntriesModule } from './stock-entries/stock-entries.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { SocialAccountsModule } from './social-accounts/social-accounts.module';
+import { DataImportModule } from './data-import/data-import.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { SocialAccountsModule } from './social-accounts/social-accounts.module';
     StockEntriesModule, // phiếu nhập/xuất kho
     ExpensesModule, // sổ dòng tiền
     SocialAccountsModule, // tài khoản MXH chăm sóc khách hàng
+    DataImportModule, // nhập & xuất dữ liệu JSON
   ],
   controllers: [AppController],
   providers: [AppService],

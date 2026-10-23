@@ -14,12 +14,21 @@ export interface AuthUser {
   role: 'admin' | 'staff';
 }
 
+interface RequestWithUser {
+  user?: AuthUser;
+}
+
 export const CurrentUser = createParamDecorator(
   // data: tham số truyền vào decorator (không dùng ở đây), ctx: ngữ cảnh request hiện tại
-  (data: unknown, ctx: ExecutionContext): AuthUser => {
+  (_data: unknown, ctx: ExecutionContext): AuthUser => {
     // Chuyển ExecutionContext (chung cho cả HTTP/WS/RPC) về đúng kiểu HTTP request
-    const request = ctx.switchToHttp().getRequest();
-    // req.user được Passport tự gắn vào sau khi JwtStrategy.validate() chạy xong
-    return request.user;
+    const request = ctx.switchToHttp().getRequest<RequestWithUser>();
+    const user = request.user;
+
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    return user;
   },
 );

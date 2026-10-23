@@ -1,7 +1,14 @@
 // ============================================================================
 // CreateProductDto: dữ liệu tạo mới 1 sản phẩm
 // ============================================================================
-import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateProductDto {
   @IsString()

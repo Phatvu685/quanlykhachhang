@@ -176,5 +176,11 @@
       update: function (id, dto) { return request('/social-accounts/' + id, { method: 'PATCH', body: dto }); },
       remove: function (id) { return request('/social-accounts/' + id, { method: 'DELETE' }); },
     },
+
+    dataImport: {
+      exportJson: function (category) {
+        return request('/data-import/export' + (category ? '?category=' + encodeURIComponent(category) : ''));
+      },
+    },
   };
 })();

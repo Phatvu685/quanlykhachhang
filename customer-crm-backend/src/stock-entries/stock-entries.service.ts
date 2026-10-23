@@ -32,7 +32,8 @@ export class StockEntriesService {
       where: { id },
       include: { product: true, expense: true },
     });
-    if (!entry) throw new NotFoundException(`Không tìm thấy phiếu kho id=${id}`);
+    if (!entry)
+      throw new NotFoundException(`Không tìm thấy phiếu kho id=${id}`);
     return entry;
   }
 
@@ -125,7 +126,14 @@ export class StockEntriesService {
         // Đã có Expense tự sinh trước đó -> cập nhật lại cho khớp phiếu kho mới nhất
         await tx.expense.update({
           where: { id: existingExpense.id },
-          data: { kind: 'chi_phi', name, amount: unitPrice, date: entry.date, note, autoStock: true },
+          data: {
+            kind: 'chi_phi',
+            name,
+            amount: unitPrice,
+            date: entry.date,
+            note,
+            autoStock: true,
+          },
         });
       } else {
         // Chưa có -> tạo mới, đồng thời gắn stockEntryId để lần sau tìm lại được

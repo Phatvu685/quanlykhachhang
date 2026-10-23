@@ -9,7 +9,11 @@
 // tự tạo/cập nhật/xoá 1 phiếu XUẤT KHO (StockEntry, type='xuat') tương ứng.
 // Tương tự với sản phẩm quà tặng kèm combo (giftProductId/giftQty của Combo).
 // ============================================================================
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, Customer } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -86,10 +90,15 @@ export class CustomersService {
   }
 
   // ---- Kiểm tra quyền sở hữu: staff chỉ thao tác được khách hàng của CHÍNH mình ----
-  private assertOwnership(customer: { staffUserId: number | null }, user: AuthUser) {
+  private assertOwnership(
+    customer: { staffUserId: number | null },
+    user: AuthUser,
+  ) {
     if (user.role === 'admin') return; // admin luôn được phép
     if (customer.staffUserId !== user.userId) {
-      throw new ForbiddenException('Bạn không có quyền thao tác trên khách hàng này (không phải người phụ trách).');
+      throw new ForbiddenException(
+        'Bạn không có quyền thao tác trên khách hàng này (không phải người phụ trách).',
+      );
     }
   }
 
@@ -97,9 +106,15 @@ export class CustomersService {
   private async findRaw(id: number) {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
-      include: { combo: true, staffUser: true, product: true, giftProduct: true },
+      include: {
+        combo: true,
+        staffUser: true,
+        product: true,
+        giftProduct: true,
+      },
     });
-    if (!customer) throw new NotFoundException(`Không tìm thấy khách hàng id=${id}`);
+    if (!customer)
+      throw new NotFoundException(`Không tìm thấy khách hàng id=${id}`);
     return customer;
   }
 
@@ -117,7 +132,8 @@ export class CustomersService {
     // BẢO MẬT: nhân viên thường KHÔNG được tự gán khách hàng mới cho người khác —
     // ép staffUserId = chính họ, bỏ qua giá trị dto.staffUserId gửi lên (chỉ admin mới
     // được quyền gán cho bất kỳ ai, kể cả để trống/"Chưa phân công").
-    const staffUserId = user.role === 'admin' ? (dto.staffUserId ?? null) : user.userId;
+    const staffUserId =
+      user.role === 'admin' ? (dto.staffUserId ?? null) : user.userId;
 
     return this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.create({
@@ -145,8 +161,19 @@ export class CustomersService {
       // Ngày dùng để ghi vào phiếu kho: ưu tiên "ngày tiếp cận", fallback "ngày đặt đơn"
       const stockDate = dto.acquiredDate || dto.lastOrderDate;
 
-      await this.syncMainStockEntry(tx, customer, dto.productId ?? null, dto.kg ?? 0, stockDate);
-      await this.syncGiftStockEntryFromCombo(tx, customer, dto.comboId ?? null, stockDate);
+      await this.syncMainStockEntry(
+        tx,
+        customer,
+        dto.productId ?? null,
+        dto.kg ?? 0,
+        stockDate,
+      );
+      await this.syncGiftStockEntryFromCombo(
+        tx,
+        customer,
+        dto.comboId ?? null,
+        stockDate,
+      );
 
       return this.reloadCustomer(tx, customer.id);
     });
@@ -178,18 +205,32 @@ export class CustomersService {
           ...(dto.comboId !== undefined && { comboId: dto.comboId }),
           ...(staffUserId !== undefined && { staffUserId }),
           ...(dto.stage !== undefined && { stage: dto.stage }),
-          ...(dto.paymentStatus !== undefined && { paymentStatus: dto.paymentStatus }),
-          ...(dto.acquiredDate !== undefined && { acquiredDate: dto.acquiredDate }),
-          ...(dto.lastOrderDate !== undefined && { lastOrderDate: dto.lastOrderDate }),
-          ...(dto.deliveryDate !== undefined && { deliveryDate: dto.deliveryDate }),
-          ...(dto.nextContactDate !== undefined && { nextContactDate: dto.nextContactDate }),
+          ...(dto.paymentStatus !== undefined && {
+            paymentStatus: dto.paymentStatus,
+          }),
+          ...(dto.acquiredDate !== undefined && {
+            acquiredDate: dto.acquiredDate,
+          }),
+          ...(dto.lastOrderDate !== undefined && {
+            lastOrderDate: dto.lastOrderDate,
+          }),
+          ...(dto.deliveryDate !== undefined && {
+            deliveryDate: dto.deliveryDate,
+          }),
+          ...(dto.nextContactDate !== undefined && {
+            nextContactDate: dto.nextContactDate,
+          }),
         },
       });
 
       // Chỉ đồng bộ lại phiếu kho nếu client có gửi productId/kg trong request này —
       // tránh vô tình xoá phiếu kho khi client chỉ muốn sửa 1 field không liên quan (vd: note).
       if (dto.productId !== undefined || dto.kg !== undefined) {
-        const stockDate = dto.acquiredDate ?? customer.acquiredDate ?? dto.lastOrderDate ?? customer.lastOrderDate;
+        const stockDate =
+          dto.acquiredDate ??
+          customer.acquiredDate ??
+          dto.lastOrderDate ??
+          customer.lastOrderDate;
         await this.syncMainStockEntry(
           tx,
           customer,
@@ -203,8 +244,17 @@ export class CustomersService {
       }
 
       if (dto.comboId !== undefined) {
-        const stockDate = dto.acquiredDate ?? customer.acquiredDate ?? dto.lastOrderDate ?? customer.lastOrderDate;
-        await this.syncGiftStockEntryFromCombo(tx, customer, dto.comboId, stockDate);
+        const stockDate =
+          dto.acquiredDate ??
+          customer.acquiredDate ??
+          dto.lastOrderDate ??
+          customer.lastOrderDate;
+        await this.syncGiftStockEntryFromCombo(
+          tx,
+          customer,
+          dto.comboId,
+          stockDate,
+        );
       }
 
       return this.reloadCustomer(tx, id);
@@ -224,12 +274,18 @@ export class CustomersService {
         data: { stockEntryId: null, giftStockEntryId: null },
       });
       if (customer.stockEntryId) {
-        await tx.expense.deleteMany({ where: { stockEntryId: customer.stockEntryId } });
+        await tx.expense.deleteMany({
+          where: { stockEntryId: customer.stockEntryId },
+        });
         await tx.stockEntry.delete({ where: { id: customer.stockEntryId } });
       }
       if (customer.giftStockEntryId) {
-        await tx.expense.deleteMany({ where: { stockEntryId: customer.giftStockEntryId } });
-        await tx.stockEntry.delete({ where: { id: customer.giftStockEntryId } });
+        await tx.expense.deleteMany({
+          where: { stockEntryId: customer.giftStockEntryId },
+        });
+        await tx.stockEntry.delete({
+          where: { id: customer.giftStockEntryId },
+        });
       }
       await tx.customer.delete({ where: { id } });
       return { success: true };
@@ -245,20 +301,28 @@ export class CustomersService {
     this.assertOwnership(c, user);
     return this.prisma.customer.update({
       where: { id },
-      data: { paymentStatus: c.paymentStatus === 'chua_tra' ? 'da_tra' : 'chua_tra' },
+      data: {
+        paymentStatus: c.paymentStatus === 'chua_tra' ? 'da_tra' : 'chua_tra',
+      },
     });
   }
 
   async togglePacked(id: number, user: AuthUser) {
     const c = await this.findRaw(id);
     this.assertOwnership(c, user);
-    return this.prisma.customer.update({ where: { id }, data: { packed: !c.packed } });
+    return this.prisma.customer.update({
+      where: { id },
+      data: { packed: !c.packed },
+    });
   }
 
   async toggleDelivered(id: number, user: AuthUser) {
     const c = await this.findRaw(id);
     this.assertOwnership(c, user);
-    return this.prisma.customer.update({ where: { id }, data: { delivered: !c.delivered } });
+    return this.prisma.customer.update({
+      where: { id },
+      data: { delivered: !c.delivered },
+    });
   }
 
   async toggleStage(id: number, user: AuthUser) {
@@ -266,7 +330,10 @@ export class CustomersService {
     this.assertOwnership(c, user);
     // Đang ở CSKH -> chuyển sang Đơn hàng, và ngược lại
     const nextStage = c.stage === 'cskh' ? 'order' : 'cskh';
-    return this.prisma.customer.update({ where: { id }, data: { stage: nextStage } });
+    return this.prisma.customer.update({
+      where: { id },
+      data: { stage: nextStage },
+    });
   }
 
   // ---- Chuyển giao khách hàng cho nhân viên khác — CHỈ ADMIN (đã chặn thêm ở
@@ -274,7 +341,9 @@ export class CustomersService {
   // được gọi từ nơi khác trong tương lai) ----
   async transfer(id: number, dto: TransferCustomerDto, user: AuthUser) {
     if (user.role !== 'admin') {
-      throw new ForbiddenException('Chỉ quản trị viên mới được chuyển giao khách hàng.');
+      throw new ForbiddenException(
+        'Chỉ quản trị viên mới được chuyển giao khách hàng.',
+      );
     }
     await this.findRaw(id);
     return this.prisma.customer.update({
@@ -290,18 +359,21 @@ export class CustomersService {
   async repeatOrder(id: number, user: AuthUser) {
     const c = await this.findRaw(id);
     this.assertOwnership(c, user);
-    return this.create({
-      name: c.name,
-      phone: c.phone ?? '',
-      address: c.address ?? '',
-      type: c.type,
-      note: '',
-      kg: 0,
-      price: 0,
-      staffUserId: c.staffUserId ?? undefined,
-      stage: 'order',
-      paymentStatus: 'da_tra',
-    }, user);
+    return this.create(
+      {
+        name: c.name,
+        phone: c.phone ?? '',
+        address: c.address ?? '',
+        type: c.type,
+        note: '',
+        kg: 0,
+        price: 0,
+        staffUserId: c.staffUserId ?? undefined,
+        stage: 'order',
+        paymentStatus: 'da_tra',
+      },
+      user,
+    );
   }
 
   // ==========================================================================
@@ -310,7 +382,8 @@ export class CustomersService {
   // việc findAll() giờ cũng tự lọc theo staffUserId cho staff.
   // ==========================================================================
   async getStats(user: AuthUser) {
-    const scope: Prisma.CustomerWhereInput = user.role === 'admin' ? {} : { staffUserId: user.userId };
+    const scope: Prisma.CustomerWhereInput =
+      user.role === 'admin' ? {} : { staffUserId: user.userId };
     const [total, cskh, old, lead] = await Promise.all([
       this.prisma.customer.count({ where: scope }),
       this.prisma.customer.count({ where: { ...scope, stage: 'cskh' } }),
@@ -323,12 +396,16 @@ export class CustomersService {
   // ---- Số đơn hàng phát sinh HÔM NAY — port từ orderTodayCount trong renderOrders() ----
   async getTodayOrderCount(user: AuthUser) {
     const todayKey = new Date().toISOString().slice(0, 10); // "yyyy-mm-dd" theo giờ UTC server
-    const scope: Prisma.CustomerWhereInput = user.role === 'admin' ? {} : { staffUserId: user.userId };
+    const scope: Prisma.CustomerWhereInput =
+      user.role === 'admin' ? {} : { staffUserId: user.userId };
     return this.prisma.customer.count({
       where: {
         ...scope,
         price: { gt: 0 },
-        OR: [{ lastOrderDate: todayKey }, { AND: [{ lastOrderDate: null }, { acquiredDate: todayKey }] }],
+        OR: [
+          { lastOrderDate: todayKey },
+          { AND: [{ lastOrderDate: null }, { acquiredDate: todayKey }] },
+        ],
       },
     });
   }
@@ -340,7 +417,12 @@ export class CustomersService {
   private async reloadCustomer(tx: Prisma.TransactionClient, id: number) {
     return tx.customer.findUniqueOrThrow({
       where: { id },
-      include: { combo: true, staffUser: true, product: true, giftProduct: true },
+      include: {
+        combo: true,
+        staffUser: true,
+        product: true,
+        giftProduct: true,
+      },
     });
   }
 
@@ -381,17 +463,29 @@ export class CustomersService {
             note: `Xuất bán cho khách hàng: ${customer.name}`,
           },
         });
-        await tx.customer.update({ where: { id: customer.id }, data: { stockEntryId: entry.id, productId } });
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: { stockEntryId: entry.id, productId },
+        });
         return;
       }
-      await tx.customer.update({ where: { id: customer.id }, data: { productId } });
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { productId },
+      });
     } else if (customer.stockEntryId) {
       // Không chọn sản phẩm nào -> gỡ liên kết rồi xoá phiếu xuất kho cũ
       const oldStockEntryId = customer.stockEntryId;
-      await tx.customer.update({ where: { id: customer.id }, data: { stockEntryId: null, productId: null } });
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { stockEntryId: null, productId: null },
+      });
       await tx.stockEntry.delete({ where: { id: oldStockEntryId } });
     } else {
-      await tx.customer.update({ where: { id: customer.id }, data: { productId: null } });
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { productId: null },
+      });
     }
   }
 
@@ -406,7 +500,9 @@ export class CustomersService {
     comboId: number | null | undefined,
     date: string | null | undefined,
   ) {
-    const combo = comboId ? await tx.combo.findUnique({ where: { id: comboId } }) : null;
+    const combo = comboId
+      ? await tx.combo.findUnique({ where: { id: comboId } })
+      : null;
     const giftProductId = combo?.giftProductId ?? null;
     const giftQty = combo ? Number(combo.giftQty) : 0;
 
@@ -421,7 +517,10 @@ export class CustomersService {
             note: `Quà tặng kèm combo cho khách hàng: ${customer.name}`,
           },
         });
-        await tx.customer.update({ where: { id: customer.id }, data: { giftProductId } });
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: { giftProductId },
+        });
       } else {
         const entry = await tx.stockEntry.create({
           data: {

@@ -3,10 +3,20 @@
 // @UseGuards(JwtAuthGuard, RolesGuard) ). Kiểm tra role của user hiện tại
 // (đã được gắn vào req.user) có nằm trong danh sách @Roles(...) yêu cầu không.
 // ============================================================================
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core'; // dùng để đọc lại metadata đã gắn bởi @Roles()
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import type { Role } from '@prisma/client';
+import type { AuthUser } from '../decorators/current-user.decorator';
+
+interface RequestWithUser {
+  user?: AuthUser;
+}
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -25,13 +35,15 @@ export class RolesGuard implements CanActivate {
     if (!requiredRoles || requiredRoles.length === 0) return true;
 
     // Lấy user hiện tại (đã được JwtAuthGuard xác thực và gắn vào request trước đó)
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 
     // So khớp role của user với danh sách role được phép
     const allowed = !!user && requiredRoles.includes(user.role);
     if (!allowed) {
-      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này.');
+      throw new ForbiddenException(
+        'Bạn không có quyền thực hiện thao tác này.',
+      );
     }
     return true;
   }

@@ -15,7 +15,11 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import type { CustomerStage, CustomerType, PaymentStatus } from '@prisma/client';
+import type {
+  CustomerStage,
+  CustomerType,
+  PaymentStatus,
+} from '@prisma/client';
 
 export class CreateCustomerDto {
   @IsString()
@@ -30,7 +34,9 @@ export class CreateCustomerDto {
   @IsString()
   address?: string;
 
-  @IsIn(['moi', 'cu', 'tiemnang'], { message: 'type phải là moi | cu | tiemnang' })
+  @IsIn(['moi', 'cu', 'tiemnang'], {
+    message: 'type phải là moi | cu | tiemnang',
+  })
   type: CustomerType;
 
   @IsOptional()
@@ -70,7 +76,9 @@ export class CreateCustomerDto {
   stage?: CustomerStage;
 
   @IsOptional()
-  @IsIn(['da_tra', 'chua_tra'], { message: 'paymentStatus phải là da_tra | chua_tra' })
+  @IsIn(['da_tra', 'chua_tra'], {
+    message: 'paymentStatus phải là da_tra | chua_tra',
+  })
   paymentStatus?: PaymentStatus;
 
   @IsOptional()

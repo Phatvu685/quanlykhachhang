@@ -5,7 +5,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -20,15 +20,17 @@ import { UsersModule } from '../users/users.module';
     // thay vì hardcode secret trực tiếp trong code.
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      inject: [ConfigService], // Nest sẽ tiêm ConfigService vào hàm factory bên dưới
-      useFactory: async (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        // Ép kiểu "as any": bản @nestjs/jwt mới đòi "expiresIn" phải khớp kiểu
-        // StringValue rất chặt (vd '12h', '7d'...) từ package "ms", nhưng giá trị
-        // đọc từ .env luôn chỉ là "string" thường -> TS không tự suy ra được là hợp lệ.
-        // Ép kiểu ở đây an toàn vì giá trị thực tế vẫn đúng định dạng ("12h", "7d"...).
-        signOptions: { expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '12h') as any },
-      }),
+      useFactory: () => {
+        const jwtSecret = process.env.JWT_SECRET ?? 'dev-secret';
+        const jwtExpiresIn = process.env.JWT_EXPIRES_IN ?? '12h';
+
+        return {
+          secret: jwtSecret,
+          signOptions: {
+            expiresIn: jwtExpiresIn as '12h',
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

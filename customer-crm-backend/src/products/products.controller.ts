@@ -43,7 +43,10 @@ export class ProductsController {
 
   @Patch(':id')
   @Roles('admin')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateProductDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateProductDto,
+  ) {
     return this.productsService.update(id, dto);
   }
 

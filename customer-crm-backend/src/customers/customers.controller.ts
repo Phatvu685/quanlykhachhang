@@ -24,7 +24,10 @@ import { TransferCustomerDto } from './dto/transfer-customer.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { CurrentUser, type AuthUser } from '../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type AuthUser,
+} from '../common/decorators/current-user.decorator';
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard) // chỉ cần đăng nhập, không giới hạn role cụ thể (trừ route transfer bên dưới)
@@ -33,7 +36,10 @@ export class CustomersController {
 
   // GET /customers?stage=order&search=...&type=...&staffUserId=...&onlyOrders=true...
   @Get()
-  async findAll(@Query() query: QueryCustomerDto, @CurrentUser() user: AuthUser) {
+  async findAll(
+    @Query() query: QueryCustomerDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.findAll(query, user);
   }
 
@@ -50,7 +56,10 @@ export class CustomersController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.findOne(id, user);
   }
 
@@ -61,7 +70,10 @@ export class CustomersController {
 
   // POST /customers/:id/repeat -> "Mua lại": tạo đơn hàng mới, giữ nguyên thông tin khách
   @Post(':id/repeat')
-  async repeat(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async repeat(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.repeatOrder(id, user);
   }
 
@@ -76,22 +88,34 @@ export class CustomersController {
 
   // ---- Các route toggle 1-click, khớp với nút "🔄 Đổi" trên UI gốc ----
   @Patch(':id/toggle-payment')
-  async togglePayment(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async togglePayment(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.togglePaymentStatus(id, user);
   }
 
   @Patch(':id/toggle-packed')
-  async togglePacked(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async togglePacked(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.togglePacked(id, user);
   }
 
   @Patch(':id/toggle-delivered')
-  async toggleDelivered(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async toggleDelivered(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.toggleDelivered(id, user);
   }
 
   @Patch(':id/toggle-stage')
-  async toggleStage(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async toggleStage(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.toggleStage(id, user);
   }
 
@@ -109,7 +133,10 @@ export class CustomersController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.customersService.remove(id, user);
   }
 }

@@ -1,3 +1,33 @@
+
+// Xử lý chống trình duyệt tự động điền sai tài khoản (như admin@yeebo.com) từ các dự án khác
+function fixAutofilledCredentials() {
+  const u = document.getElementById('loginUser');
+  const p = document.getElementById('loginPass');
+  if (u && p) {
+    // Nếu trình duyệt tự điền email hoặc tài khoản khác
+    if (u.value.includes('@') || u.value.toLowerCase().includes('yeebo')) {
+      u.value = 'admin';
+      p.value = 'admin123';
+    }
+  }
+}
+
+// Bắt sự kiện bấm vào nút "admin / admin123" để tự điền nhanh
+function setupDefaultCredentialsHelper() {
+  const fillBtn = document.getElementById('fillDefaultAdminBtn');
+  if (fillBtn) {
+    fillBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const u = document.getElementById('loginUser');
+      const p = document.getElementById('loginPass');
+      if (u) u.value = 'admin';
+      if (p) p.value = 'admin123';
+      const err = document.getElementById('loginError');
+      if (err) err.classList.remove('show');
+    });
+  }
+}
+
 let customers = [];
 let combos = [];
 let accounts = [];
@@ -357,6 +387,82 @@ function formatKg(n, unit){
   return `${Number.isInteger(n) ? n : n.toFixed(1)} ${unit}`;
 }
 
+/* ================= PHÂN TRANG (PAGINATION) ================= */
+const PAGE_SIZE = 10;
+const paginationState = {
+  order: 1,      // Tab Khách hàng
+  cskh: 1,       // Tab CSKH
+  orders: 1,     // Tab Đơn hàng
+  cashflow: 1,   // Tab Sổ dòng tiền
+  stock: 1,      // Tab Sổ kho
+  products: 1,   // Tab Sản phẩm kho
+  combos: 1,     // Tab Combo
+  accounts: 1    // Tab Tài khoản MXH
+};
+
+function renderPaginationBar(tableKey, totalItems, currentPage, pageSize){
+  pageSize = pageSize || PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+  if (totalItems <= pageSize) {
+    return '';
+  }
+
+  const startIdx = (safePage - 1) * pageSize + 1;
+  const endIdx = Math.min(safePage * pageSize, totalItems);
+
+  let pages = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (safePage > 3) pages.push('...');
+    const start = Math.max(2, safePage - 1);
+    const end = Math.min(totalPages - 1, safePage + 1);
+    for (let i = start; i <= end; i++) {
+      if (!pages.includes(i)) pages.push(i);
+    }
+    if (safePage < totalPages - 2) pages.push('...');
+    if (!pages.includes(totalPages)) pages.push(totalPages);
+  }
+
+  const buttonsHtml = pages.map(p => {
+    if (p === '...') return `<span class="page-ellipsis">…</span>`;
+    const isActive = p === safePage ? 'active' : '';
+    return `<button type="button" class="page-num-btn ${isActive}" data-page="${p}">${p}</button>`;
+  }).join('');
+
+  return `
+    <div class="pagination-bar" data-table="${tableKey}">
+      <div class="pagination-info">
+        Hiển thị <strong>${startIdx}–${endIdx}</strong> / <strong>${totalItems}</strong> mục (Trang ${safePage}/${totalPages})
+      </div>
+      <div class="pagination-controls">
+        <button type="button" class="page-nav-btn" data-page="1" ${safePage === 1 ? 'disabled' : ''} title="Trang đầu">«</button>
+        <button type="button" class="page-nav-btn" data-page="${safePage - 1}" ${safePage === 1 ? 'disabled' : ''} title="Trang trước">‹ Trước</button>
+        <div class="page-numbers">${buttonsHtml}</div>
+        <button type="button" class="page-nav-btn" data-page="${safePage + 1}" ${safePage === totalPages ? 'disabled' : ''} title="Trang sau">Sau ›</button>
+        <button type="button" class="page-nav-btn" data-page="${totalPages}" ${safePage === totalPages ? 'disabled' : ''} title="Trang cuối">»</button>
+      </div>
+    </div>
+  `;
+}
+
+function attachPaginationEvents(holder, tableKey, onPageChange){
+  const bar = holder.querySelector(`.pagination-bar[data-table="${tableKey}"]`);
+  if (!bar) return;
+  bar.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const p = Number(btn.dataset.page);
+      if (!isNaN(p) && p > 0) {
+        onPageChange(p);
+      }
+    });
+  });
+}
+
 function render(){
   renderCustomerList('order', 'custSearch','custFilterType','custFilterStaff','custCount','customerTableHolder', 'custFilterPayment','custFilterPacked','custFilterDelivered');
   renderCustomerList('cskh', 'cskhSearch','cskhFilterType','cskhFilterStaff','cskhCount','cskhTableHolder', 'cskhFilterPayment','cskhFilterPacked','cskhFilterDelivered');
@@ -386,8 +492,13 @@ function renderOrders(){
   const allOrders = customers.filter(c=>c.price > 0);
 
   const todayKey = dateKeyFromTimestamp(Date.now());
-  const todayCount = allOrders.filter(c=>getOrderDateKey(c) === todayKey).length;
-  document.getElementById('orderTodayCount').textContent = `${todayCount} đơn`;
+  const todayOrders = allOrders.filter(c=>getOrderDateKey(c) === todayKey);
+  const todayCount = todayOrders.length;
+  const todayValue = todayOrders.reduce((s,c)=>s+(Number(c.price)||0), 0);
+  const orderTodayCountEl = document.getElementById('orderTodayCount');
+  if(orderTodayCountEl) orderTodayCountEl.textContent = `${todayCount} đơn`;
+  const orderTodayValueEl = document.getElementById('orderTodayValue');
+  if(orderTodayValueEl) orderTodayValueEl.textContent = formatVND(todayValue);
 
   const filtered = allOrders.filter(c=>{
     const matchSearch = !search || c.name.toLowerCase().includes(search) || c.phone.includes(search);
@@ -408,32 +519,63 @@ function renderOrders(){
     return;
   }
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (!paginationState.orders || paginationState.orders > totalPages) {
+    paginationState.orders = 1;
+  }
+  const curPage = paginationState.orders;
+  const startIdx = (curPage - 1) * PAGE_SIZE;
+  const pagedOrders = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+
   holder.innerHTML = `<table>
     <thead><tr>
       <th>Ngày đặt đơn</th>
       <th>Khách hàng</th>
       <th>Sản phẩm / KL</th>
       <th>Giá trị</th>
-      <th>Trạng thái</th>
+      <th style="text-align:center;">Trạng thái</th>
       <th>Nhân viên</th>
+      <th style="text-align:center;">Thao tác</th>
     </tr></thead>
     <tbody>
-      ${filtered.map(c=>{
+      ${pagedOrders.map(c=>{
         const product = c.productId ? products.find(p=>p.id===c.productId) : null;
         const payTag = c.paymentStatus === 'chua_tra'
-          ? `<span class="tag tag-debt">🕒 Công nợ</span>`
-          : `<span class="tag tag-revenue">✅ Đã thu</span>`;
+          ? `<span class="tag tag-debt row-action tag-clickable" data-action="toggle-payment" data-id="${c.id}" title="Bấm để đổi thanh toán">🕒 Công nợ</span>`
+          : `<span class="tag tag-revenue row-action tag-clickable" data-action="toggle-payment" data-id="${c.id}" title="Bấm để đổi thanh toán">✅ Đã thu</span>`;
         return `<tr>
           <td style="white-space:nowrap;">${formatDateVN(getOrderDateKey(c))}</td>
-          <td>${escapeHtml(c.name)}<div class="contact-line">${escapeHtml(c.phone||'')}</div></td>
-          <td>${product ? escapeHtml(product.name) : '—'}${c.kg ? ` — ${c.kg} ${product ? escapeHtml(product.unit) : 'kg'}` : ''}</td>
-          <td style="white-space:nowrap;"><b>${formatVND(c.price)}</b></td>
-          <td>${payTag}</td>
-          <td>${c.staff ? escapeHtml(staffLabel[c.staff]) : '<span class="contact-line">—</span>'}</td>
+          <td><div class="cust-name">${escapeHtml(c.name)}</div><div class="cust-phone">${escapeHtml(c.phone||'')}</div></td>
+          <td>${product ? escapeHtml(product.name) : '—'}${c.kg ? ` — <strong>${c.kg} ${product ? escapeHtml(product.unit) : 'kg'}</strong>` : ''}</td>
+          <td style="white-space:nowrap;font-weight:700;color:#0f172a;">${formatVND(c.price)}</td>
+          <td style="white-space:nowrap;text-align:center;">${payTag}</td>
+          <td style="white-space:nowrap;">${c.staff ? escapeHtml(staffLabel[c.staff]) : '<span class="contact-line">—</span>'}</td>
+          <td style="white-space:nowrap;text-align:center;">
+            <button class="row-action" data-action="print-invoice" data-id="${c.id}" title="In / Xuất hóa đơn PDF" style="padding:4px 10px;font-size:12px;font-weight:700;">🧾 In hóa đơn</button>
+          </td>
         </tr>`;
       }).join('')}
     </tbody>
-  </table>`;
+  </table>
+  ${renderPaginationBar('orders', filtered.length, curPage, PAGE_SIZE)}`;
+
+  attachPaginationEvents(holder, 'orders', (newPage) => {
+    paginationState.orders = newPage;
+    renderOrders();
+    holder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  holder.querySelectorAll('.row-action').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = Number(btn.dataset.id);
+      if(btn.dataset.action === 'print-invoice') {
+        const c = customers.find(x => x.id === id);
+        if(c) showInvoiceModal(c);
+      } else if(btn.dataset.action === 'toggle-payment') {
+        togglePaymentStatus(id);
+      }
+    });
+  });
 }
 
 async function toggleCustomerStage(id){
@@ -471,31 +613,33 @@ function renderCustomerRow(c, stage, compactIdentity){
   const tp = typeLabel[c.type];
   const qtyInfo = c.kg ? `${c.kg} kg` : '—';
   const amountInfo = c.price ? formatVND(c.price) : '—';
+
   const paymentBadge = c.price
     ? (c.paymentStatus === 'chua_tra'
-        ? `<span class="tag tag-debt" style="font-size:10px;">🕒 Công nợ</span>`
-        : `<span class="tag tag-revenue" style="font-size:10px;">✅ Đã thu</span>`)
+        ? `<span class="tag tag-debt row-action tag-clickable" data-action="toggle-payment" data-id="${c.id}" title="Bấm để đổi thanh toán">🕒 Công nợ</span>`
+        : `<span class="tag tag-revenue row-action tag-clickable" data-action="toggle-payment" data-id="${c.id}" title="Bấm để đổi thanh toán">✅ Đã thu</span>`)
     : '<span class="contact-line">—</span>';
-  const paymentToggleBtn = c.price
-    ? `<button class="row-action" data-action="toggle-payment" data-id="${c.id}" title="Đổi trạng thái thanh toán" style="margin-top:4px;">🔄 Đổi</button>`
-    : '';
+
   const packedBadge = c.packed
-    ? `<span class="tag tag-revenue" style="font-size:10px;">📦 Đã đóng hàng</span>`
-    : `<span class="tag tag-debt" style="font-size:10px;">📦 Chưa đóng hàng</span>`;
+    ? `<span class="tag tag-packed-done row-action tag-clickable" data-action="toggle-packed" data-id="${c.id}" title="Bấm để đổi đóng hàng">📦 Đã đóng</span>`
+    : `<span class="tag tag-packed-pending row-action tag-clickable" data-action="toggle-packed" data-id="${c.id}" title="Bấm để đổi đóng hàng">📦 Chưa đóng</span>`;
+
   const deliveredBadge = c.delivered
-    ? `<span class="tag tag-revenue" style="font-size:10px;">🚚 Đã giao hàng</span>`
-    : `<span class="tag tag-debt" style="font-size:10px;">🚚 Chưa giao hàng</span>`;
+    ? `<span class="tag tag-delivered-done row-action tag-clickable" data-action="toggle-delivered" data-id="${c.id}" title="Bấm để đổi giao hàng">🚚 Đã giao</span>`
+    : `<span class="tag tag-delivered-pending row-action tag-clickable" data-action="toggle-delivered" data-id="${c.id}" title="Bấm để đổi giao hàng">🚚 Chưa giao</span>`;
+
   const comboInfo = c.combo === 'co'
     ? `<div class="contact-line">🎁 ${escapeHtml(combos.find(x=>x.id===c.comboId)?.name || 'Combo đã xóa')}</div>`
     : '';
+
   const dateLines = [];
   if(c.acquiredDate) dateLines.push(`<div class="contact-line">Tiếp nhận: ${formatDateVN(c.acquiredDate)}</div>`);
   if(c.lastOrderDate) dateLines.push(`<div class="contact-line">Đặt đơn: ${formatDateVN(c.lastOrderDate)}</div>`);
   if(c.deliveryDate){
     const overdue = isPastDate(c.deliveryDate);
-    dateLines.push(`<div class="contact-line${overdue?' date-overdue':''}">Giao hàng: ${formatDateVN(c.deliveryDate)}${overdue?' (quá hạn)':''}</div>`);
+    dateLines.push(`<div class="contact-line${overdue?' date-overdue':''}">Giao: ${formatDateVN(c.deliveryDate)}${overdue?' (quá hạn)':''}</div>`);
   }
-  if(c.nextContactDate) dateLines.push(`<div class="contact-line">Liên hệ lại: ${formatDateVN(c.nextContactDate)}</div>`);
+  if(c.nextContactDate) dateLines.push(`<div class="contact-line">Liên hệ: ${formatDateVN(c.nextContactDate)}</div>`);
   const dateInfo = dateLines.length ? dateLines.join('') : '<span class="contact-line">—</span>';
   const stageToggleLabel = stage === 'cskh' ? '✅ Đã phát sinh đơn' : '🤝 Chuyển về CSKH';
 
@@ -504,9 +648,9 @@ function renderCustomerRow(c, stage, compactIdentity){
   const identityCell = compactIdentity
     ? `<div class="contact-line">↳ Đặt lúc: <strong>${createdLabel}</strong></div>`
     : `
-      <div><strong>${escapeHtml(c.name)}</strong></div>
-      <div class="contact-line">${escapeHtml(c.phone||'—')}</div>
-      <div class="contact-line">${escapeHtml(c.address||'')}</div>
+      <div class="cust-name">${escapeHtml(c.name)}</div>
+      <div class="cust-phone">${escapeHtml(c.phone||'—')}</div>
+      <div class="cust-address">${escapeHtml(c.address||'')}</div>
     `;
 
   return `
@@ -518,36 +662,33 @@ function renderCustomerRow(c, stage, compactIdentity){
     </td>
     <td style="white-space:nowrap;">${c.staff ? escapeHtml(staffLabel[c.staff]) : '<span class="contact-line">—</span>'}</td>
     <td style="white-space:nowrap;">
-      <div>${qtyInfo}</div>
+      <div style="font-weight:700;color:#0f172a;">${qtyInfo}</div>
       ${comboInfo}
     </td>
-    <td style="white-space:nowrap;">${amountInfo}</td>
-    <td style="white-space:nowrap;">
-      <div>${paymentBadge}</div>
-      ${paymentToggleBtn}
+    <td style="white-space:nowrap;font-weight:700;color:#0f172a;font-size:13.5px;">${amountInfo}</td>
+    <td style="white-space:nowrap;text-align:center;">
+      ${paymentBadge}
     </td>
-    <td style="white-space:nowrap;">
-      <span style="display:inline-block;vertical-align:top;text-align:center;">
-        <div>${packedBadge}</div>
-        <button class="row-action" data-action="toggle-packed" data-id="${c.id}" title="Đổi trạng thái đóng hàng">🔄 Đổi</button>
-      </span>
-      <span style="display:inline-block;vertical-align:top;text-align:center;margin-left:8px;">
-        <div>${deliveredBadge}</div>
-        <button class="row-action" data-action="toggle-delivered" data-id="${c.id}" title="Đổi trạng thái giao hàng">🔄 Đổi</button>
-      </span>
+    <td style="white-space:nowrap;text-align:center;">
+      <div style="display:inline-flex;gap:6px;align-items:center;justify-content:center;vertical-align:middle;">
+        ${packedBadge}
+        ${deliveredBadge}
+      </div>
     </td>
     <td>${dateInfo}</td>
     <td class="note-cell">${escapeHtml(c.note||'—')}</td>
-    <td style="white-space:nowrap;">
-      <button class="row-action" data-action="edit" data-id="${c.id}" title="Sửa">✏️</button>
-      <button class="row-action" data-action="repeat" data-id="${c.id}" title="Khách mua lại — tạo đơn hàng mới, giữ nguyên đơn cũ">🔁</button>
-      <button class="row-action" data-action="transfer" data-id="${c.id}" title="Chuyển giao cho nhân viên khác">🔄</button>
-      <button class="row-action" data-action="delete" data-id="${c.id}" title="Xóa">🗑️</button>
+    <td style="white-space:nowrap;text-align:center;">
+      <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+        ${c.price ? `<button class="row-action" data-action="print-invoice" data-id="${c.id}" title="In / Xuất hóa đơn PDF">🧾</button>` : ''}
+        <button class="row-action" data-action="edit" data-id="${c.id}" title="Sửa">✏️</button>
+        <button class="row-action" data-action="repeat" data-id="${c.id}" title="Khách mua lại — tạo đơn hàng mới, giữ nguyên đơn cũ">🔁</button>
+        <button class="row-action" data-action="transfer" data-id="${c.id}" title="Chuyển giao cho nhân viên khác">🔄</button>
+        <button class="row-action row-action-delete" data-action="delete" data-id="${c.id}" title="Xóa">🗑️</button>
+      </div>
     </td>
   </tr>`;
 }
 
-// Render 1 dòng "gộp" đại diện cho 1 khách có NHIỀU đơn hàng (thu gọn, bấm để xổ ra từng đơn)
 function renderCustomerGroupHeaderRow(orders, stage, groupKey){
   const latest = orders[0]; // đơn mới nhất (đã sort giảm dần theo createdAt)
   const isOpen = expandedCustomerGroups.has(groupKey);
@@ -567,17 +708,17 @@ function renderCustomerGroupHeaderRow(orders, stage, groupKey){
     staffCellHtml = latest.staff ? escapeHtml(staffLabel[latest.staff]) : '<span class="contact-line">—</span>';
   } else {
     const names = distinctStaff.map(s=> s ? escapeHtml(staffLabel[s]) : 'Chưa phân công').join(', ');
-    staffCellHtml = `<span class="tag tag-lead" style="font-size:10px;">👥 ${distinctStaff.length} NV</span><div class="contact-line">${names}</div>`;
+    staffCellHtml = `<span class="tag tag-lead" >👥 ${distinctStaff.length} NV</span><div class="contact-line">${names}</div>`;
   }
 
   return `
   <tr class="cust-grouprow">
     <td>
-      <button class="row-action group-toggle-btn" data-action="toggle-group" data-key="${escapeHtml(groupKey)}" style="margin-right:6px;">${isOpen ? '▼' : '▶'}</button>
-      <div style="display:inline-block;vertical-align:top;">
-        <div><strong>${escapeHtml(latest.name)}</strong> <span class="tag tag-lead" style="font-size:10px;">🧾 ${orders.length} đơn</span></div>
-        <div class="contact-line">${escapeHtml(latest.phone||'—')}</div>
-        <div class="contact-line">${escapeHtml(latest.address||'')}</div>
+      <button class="row-action group-toggle-btn" data-action="toggle-group" data-key="${escapeHtml(groupKey)}" title="${isOpen ? 'Thu gọn' : 'Bấm xem chi tiết ' + orders.length + ' đơn'}">${isOpen ? '▼' : '▶'}</button>
+      <div style="display:inline-block;vertical-align:middle;">
+        <div class="cust-name">${escapeHtml(latest.name)} <span class="tag tag-vip-group">👑 ${orders.length} đơn</span></div>
+        <div class="cust-phone">${escapeHtml(latest.phone||'—')}</div>
+        <div class="cust-address">${escapeHtml(latest.address||'')}</div>
       </div>
     </td>
     <td style="white-space:nowrap;"><span class="tag ${tp.c}">${tp.t}</span><div class="contact-line">Đơn gần nhất</div></td>
@@ -594,7 +735,7 @@ function renderCustomerGroupHeaderRow(orders, stage, groupKey){
     </td>
     <td class="contact-line">Đơn gần nhất: ${formatDateVN(getOrderDateKey(latest)) || '—'}</td>
     <td class="note-cell">—</td>
-    <td style="white-space:nowrap;">
+    <td style="white-space:nowrap;text-align:center;">
       <button class="row-action" data-action="repeat" data-id="${latest.id}" title="Thêm đơn hàng mới cho khách này">🔁 Mua lại</button>
     </td>
   </tr>`;
@@ -640,11 +781,19 @@ function renderCustomerList(stage, searchId, typeId, staffId, countId, holderId,
   }).sort((ga,gb)=>(gb.orders[0].createdAt||0)-(ga.orders[0].createdAt||0));
 
   const groupCount = groups.length;
+  const totalPages = Math.max(1, Math.ceil(groupCount / PAGE_SIZE));
+  if (!paginationState[stage] || paginationState[stage] > totalPages) {
+    paginationState[stage] = 1;
+  }
+  const curPage = paginationState[stage];
+  const startIdx = (curPage - 1) * PAGE_SIZE;
+  const pagedGroups = groups.slice(startIdx, startIdx + PAGE_SIZE);
+
   document.getElementById(countId).textContent = groupCount !== list.length
     ? `${list.length} ${unitLabel} — ${groupCount} khách`
     : `${list.length} ${unitLabel}`;
 
-  const rowsHtml = groups.map(({key, orders})=>{
+  const rowsHtml = pagedGroups.map(({key, orders})=>{
     if(orders.length === 1) return renderCustomerRow(orders[0], stage, false);
     const headerRow = renderCustomerGroupHeaderRow(orders, stage, key);
     if(!expandedCustomerGroups.has(key)) return headerRow;
@@ -652,22 +801,31 @@ function renderCustomerList(stage, searchId, typeId, staffId, countId, holderId,
     return headerRow + subRows;
   }).join('');
 
+  const paginationHtml = renderPaginationBar(stage, groupCount, curPage, PAGE_SIZE);
+
   holder.innerHTML = `
     <table>
       <thead><tr>
-        <th>Khách hàng</th><th>Phân loại</th><th>Phụ trách</th><th>Số lượng</th><th>Số tiền</th><th>Trạng thái</th><th>Đóng hàng / Giao hàng</th><th>Mốc thời gian</th><th>Ghi chú</th><th>Thao tác</th>
+        <th>Khách hàng</th><th>Phân loại</th><th>Phụ trách</th><th>Số lượng</th><th>Số tiền</th><th style="text-align:center;">Trạng thái</th><th style="text-align:center;">Đóng hàng / Giao hàng</th><th>Mốc thời gian</th><th>Ghi chú</th><th style="text-align:center;">Thao tác</th>
       </tr></thead>
       <tbody>
         ${rowsHtml}
       </tbody>
     </table>
+    ${paginationHtml}
   `;
+  attachPaginationEvents(holder, stage, (newPage) => {
+    paginationState[stage] = newPage;
+    renderCustomerList(stage, searchId, typeId, staffId, countId, holderId, paymentId, packedId, deliveredId);
+    holder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
   holder.querySelectorAll('.row-action').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       if(btn.dataset.action === 'toggle-group'){ toggleCustomerGroup(btn.dataset.key); return; }
       const id = Number(btn.dataset.id);
       if(btn.dataset.action === 'edit') startEditCustomer(id);
       else if(btn.dataset.action === 'repeat') startRepeatOrder(id);
+      else if(btn.dataset.action === 'print-invoice') { const c = customers.find(x=>x.id===id); if(c) showInvoiceModal(c); }
       else if(btn.dataset.action === 'transfer') openTransferModal(id);
       else if(btn.dataset.action === 'toggle-payment') togglePaymentStatus(id);
       else if(btn.dataset.action === 'toggle-packed') togglePackedStatus(id);
@@ -752,35 +910,69 @@ function renderCashflow(){
     hoan_von: {t:'Hoàn vốn', c:'tag-refund'},
   };
 
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
+  if (!paginationState.cashflow || paginationState.cashflow > totalPages) {
+    paginationState.cashflow = 1;
+  }
+  const curPage = paginationState.cashflow;
+  const startIdx = (curPage - 1) * PAGE_SIZE;
+  const pagedEntries = filteredEntries.slice(startIdx, startIdx + PAGE_SIZE);
+
   holder.innerHTML = `
     <table>
-      <thead><tr><th>Loại</th><th>Nội dung</th><th>Số tiền</th><th>Ngày</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
+      <thead>
+        <tr>
+          <th style="text-align:center;width:120px;">Loại</th>
+          <th>Nội dung</th>
+          <th style="text-align:right;width:150px;">Số tiền</th>
+          <th style="text-align:center;width:115px;">Ngày</th>
+          <th>Ghi chú</th>
+          <th style="text-align:center;width:110px;">Thao tác</th>
+        </tr>
+      </thead>
       <tbody>
-        ${filteredEntries.map(e=>{
+        ${pagedEntries.map(e=>{
           const km = kindMeta[e.kind];
-          const sign = (e.kind === 'revenue' || e.kind === 'debt') ? '+' : '-';
+          const isPositive = (e.kind === 'revenue' || e.kind === 'debt');
+          const sign = isPositive ? '+' : '-';
+          const amountColor = isPositive ? '#15803d' : '#dc2626';
+          const amountBg = isPositive ? '#dcfce7' : '#fef2f2';
           const isExpenseEditable = (e.kind === 'chi_phi' || e.kind === 'von' || e.kind === 'hoan_von') && !e.autoStock;
           return `<tr>
-            <td><span class="tag ${km.c}">${km.t}</span></td>
-            <td>${escapeHtml(e.name)}</td>
-            <td style="white-space:nowrap;">${sign}${formatVND(e.amount)}</td>
-            <td>${e.date ? formatDateVN(e.date) : '—'}</td>
-            <td class="note-cell">${escapeHtml(e.note||'—')}</td>
+            <td style="text-align:center;white-space:nowrap;"><span class="tag ${km.c}">${km.t}</span></td>
             <td>
+              <div style="font-weight:700;color:#0f172a;font-size:13.5px;">${escapeHtml(e.name)}</div>
+            </td>
+            <td style="white-space:nowrap;text-align:right;">
+              <span style="display:inline-block;padding:3px 10px;border-radius:6px;font-weight:800;font-size:13.5px;color:${amountColor};background:${amountBg};font-variant-numeric:tabular-nums;">
+                ${sign}${formatVND(e.amount)}
+              </span>
+            </td>
+            <td style="white-space:nowrap;text-align:center;color:#475569;font-weight:600;font-size:13px;">${e.date ? formatDateVN(e.date) : '<span style="color:#94a3b8;">—</span>'}</td>
+            <td class="note-cell" style="color:#64748b;font-size:12.5px;">${e.note ? escapeHtml(e.note) : '<span style="color:#cbd5e1;">—</span>'}</td>
+            <td style="text-align:center;white-space:nowrap;">
               ${isExpenseEditable ? `
-                <button class="row-action" data-action="edit" data-id="${e.id}" title="Sửa">✏️</button>
-                <button class="row-action" data-action="delete" data-id="${e.id}" title="Xóa">🗑️</button>
+                <div style="display:inline-flex;gap:4px;align-items:center;justify-content:center;">
+                  <button class="row-action" data-action="edit" data-id="${e.id}" title="Sửa" style="width:28px;height:28px;padding:0;border-radius:6px;">✏️</button>
+                  <button class="row-action row-action-delete" data-action="delete" data-id="${e.id}" title="Xóa" style="width:28px;height:28px;padding:0;border-radius:6px;">🗑️</button>
+                </div>
               ` : e.kind === 'debt' ? `
-                <button class="row-action" data-action="mark-paid" data-id="${e.custId}" title="Đánh dấu đã thu tiền">✅ Đã thu</button>
+                <button class="row-action" data-action="mark-paid" data-id="${e.custId}" title="Đánh dấu đã thu tiền" style="background:#dcfce7;color:#15803d;border:1.5px solid #22c55e;font-weight:700;font-size:11.5px;padding:3px 8px;border-radius:6px;cursor:pointer;">✅ Đã thu</button>
               ` : e.autoStock ? `
-                <span class="contact-line" title="Sửa/xóa tại tab Kho hàng để giữ dữ liệu khớp nhau">🔒 Tự động (Kho hàng)</span>
-              ` : `<span class="contact-line">tự động</span>`}
+                <span class="tag" style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;font-size:11px;padding:2px 8px;border-radius:6px;" title="Sửa/xóa tại tab Kho hàng">🔒 Kho hàng</span>
+              ` : `<span class="contact-line" style="color:#94a3b8;font-size:11.5px;">tự động</span>`}
             </td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
+    ${renderPaginationBar('cashflow', filteredEntries.length, curPage, PAGE_SIZE)}
   `;
+  attachPaginationEvents(holder, 'cashflow', (newPage) => {
+    paginationState.cashflow = newPage;
+    renderCashflow();
+    holder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
   holder.querySelectorAll('.row-action').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = Number(btn.dataset.id);
@@ -1083,11 +1275,19 @@ function renderStockLedger(){
     return;
   }
 
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (!paginationState.stock || paginationState.stock > totalPages) {
+    paginationState.stock = 1;
+  }
+  const curPage = paginationState.stock;
+  const startIdx = (curPage - 1) * PAGE_SIZE;
+  const pagedStock = list.slice(startIdx, startIdx + PAGE_SIZE);
+
   holder.innerHTML = `
     <table>
       <thead><tr><th>Loại</th><th>Sản phẩm</th><th>Số lượng</th><th>Thành tiền</th><th>Ngày</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
       <tbody>
-        ${list.map(s=>{
+        ${pagedStock.map(s=>{
           const p = products.find(x=>x.id===s.productId);
           const pname = p ? p.name : 'Sản phẩm đã xóa';
           const unit = p ? p.unit : '';
@@ -1107,7 +1307,13 @@ function renderStockLedger(){
         }).join('')}
       </tbody>
     </table>
+    ${renderPaginationBar('stock', list.length, curPage, PAGE_SIZE)}
   `;
+  attachPaginationEvents(holder, 'stock', (newPage) => {
+    paginationState.stock = newPage;
+    renderStockLedger();
+    holder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
   holder.querySelectorAll('.row-action').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = Number(btn.dataset.id);
@@ -1326,6 +1532,570 @@ function closeTransferModal(){
   document.getElementById('transferModalOverlay').classList.remove('active');
 }
 
+
+// ================= HỆ THỐNG XUẤT HÓA ĐƠN BÁN HÀNG & FILE PDF =================
+let currentInvoiceCustomer = null;
+let invoicePreviewIncludeSignatures = true;
+
+function generateInvoiceHtml(c, options = {}){
+  const includeSignatures = (options.includeSignatures !== undefined) ? !!options.includeSignatures : true;
+  const product = c.productId ? products.find(p=>p.id===c.productId) : null;
+  const combo = c.comboId ? combos.find(x=>x.id===c.comboId) : null;
+  const giftProduct = (combo && combo.giftProductId) ? products.find(p=>p.id===combo.giftProductId) : null;
+  const staffName = c.staff ? (staffLabel[c.staff] || c.staff) : 'Cửa hàng';
+  const orderDate = c.lastOrderDate ? formatDateVN(c.lastOrderDate) : formatDateTimeVN(c.createdAt || Date.now());
+  const invoiceCode = 'HD-' + String(c.id).padStart(5, '0');
+  const isPaid = c.paymentStatus !== 'chua_tra';
+
+  let itemName = 'Sản phẩm gạo / nông sản';
+  let unit = 'kg';
+  let unitPrice = (c.kg && Number(c.kg) > 0) ? Math.round(Number(c.price) / Number(c.kg)) : Number(c.price);
+
+  if(combo){
+    itemName = 'Combo: ' + combo.name;
+    unit = 'combo';
+    unitPrice = Number(c.price);
+  } else if(product){
+    itemName = product.name;
+    unit = product.unit || 'kg';
+  }
+
+  let giftRow = '';
+  if(combo && giftProduct && combo.giftQty){
+    giftRow = `
+      <tr style="border-bottom:1px solid #e2e8f0;background:#fcfdfd;">
+        <td style="text-align:center;padding:10px;">2</td>
+        <td style="padding:10px;">
+          <strong style="color:#0f172a;">🎁 Quà tặng kèm: ${escapeHtml(giftProduct.name)}</strong>
+          <div style="font-size:12px;color:#64748b;">(Ưu đãi kèm theo combo "${escapeHtml(combo.name)}")</div>
+        </td>
+        <td style="text-align:center;padding:10px;">${escapeHtml(giftProduct.unit || 'cái')}</td>
+        <td style="text-align:center;padding:10px;font-weight:bold;">${combo.giftQty}</td>
+        <td style="text-align:right;padding:10px;">0đ</td>
+        <td style="text-align:right;padding:10px;font-weight:bold;color:#16a34a;">0đ (Miễn phí)</td>
+      </tr>
+    `;
+  }
+
+  const signaturesHtml = includeSignatures ? `
+    <!-- Ký nhận 3 bên (Chỉ hiển thị khi In ra giấy) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;gap:14px;margin-top:30px;padding-top:16px;border-top:1px dashed #cbd5e1;" class="invoice-signatures">
+      <div>
+        <div style="font-size:13.5px;font-weight:800;color:#0f172a;">Người lập hóa đơn</div>
+        <div style="font-size:11.5px;color:#64748b;font-style:italic;">(Ký, ghi rõ họ tên)</div>
+        <div style="height:60px;"></div>
+        <div style="font-weight:700;font-size:13px;color:#1e293b;">${escapeHtml(currentUser ? currentUser.username : staffName)}</div>
+      </div>
+      <div>
+        <div style="font-size:13.5px;font-weight:800;color:#0f172a;">Người giao hàng</div>
+        <div style="font-size:11.5px;color:#64748b;font-style:italic;">(Ký, ghi rõ họ tên)</div>
+        <div style="height:60px;"></div>
+      </div>
+      <div>
+        <div style="font-size:13.5px;font-weight:800;color:#0f172a;">Người nhận hàng</div>
+        <div style="font-size:11.5px;color:#64748b;font-style:italic;">(Ký, ghi rõ họ tên)</div>
+        <div style="height:60px;"></div>
+        <div style="font-weight:700;font-size:13px;color:#1e293b;">${escapeHtml(c.name)}</div>
+      </div>
+    </div>
+  ` : '';
+
+  return `
+  <div class="invoice-paper" id="invoicePaper">
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #0f172a;padding-bottom:16px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <img src="/assets/logo.png" alt="Logo" style="width:64px;height:64px;border-radius:12px;object-fit:cover;" onerror="this.style.display='none'">
+        <div>
+          <div style="font-size:22px;font-weight:900;color:#0f172a;letter-spacing:-0.01em;">VỊ NGUYÊN FOOD</div>
+          <div style="font-size:12.5px;color:#d97706;font-weight:700;font-style:italic;">Từ giọt phù sa đến bàn ăn người Việt</div>
+          <div style="font-size:12px;color:#64748b;margin-top:2px;">Hotline / Zalo: 0907.441.019 • Giao hàng tận nơi</div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:24px;font-weight:900;color:#2563eb;letter-spacing:0.02em;">HÓA ĐƠN BÁN HÀNG</div>
+        <div style="font-size:13.5px;font-weight:700;color:#0f172a;margin-top:2px;">Mã hóa đơn: <span style="font-family:monospace;letter-spacing:0.05em;color:#1d4ed8;">${invoiceCode}</span></div>
+        <div style="font-size:12.5px;color:#64748b;margin-top:2px;">Ngày lập: <strong>${orderDate}</strong></div>
+      </div>
+    </div>
+
+    <!-- Thông tin khách hàng & Giao nhận -->
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:12px;padding:16px 18px;margin-bottom:20px;">
+      <div>
+        <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">KHÁCH HÀNG (NGƯỜI NHẬN)</div>
+        <div style="font-size:16px;font-weight:800;color:#0f172a;">${escapeHtml(c.name)}</div>
+        <div style="font-size:14px;color:#1d4ed8;font-weight:700;margin-top:4px;">📞 SĐT: ${escapeHtml(c.phone || '—')}</div>
+        <div style="font-size:13px;color:#334155;margin-top:4px;line-height:1.45;">📍 Địa chỉ: <strong>${escapeHtml(c.address || 'Tại cửa hàng')}</strong></div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">THÔNG TIN ĐƠN HÀNG</div>
+        <div style="font-size:13px;color:#334155;margin-bottom:4px;">Nhân viên tư vấn: <strong>${escapeHtml(staffName)}</strong></div>
+        <div style="font-size:13px;color:#334155;margin-bottom:4px;">Ngày giao dự kiến: <strong>${c.deliveryDate ? formatDateVN(c.deliveryDate) : 'Giao ngay'}</strong></div>
+        <div style="font-size:13px;color:#334155;line-height:1.4;">Ghi chú: <em>${escapeHtml(c.note || 'Không có')}</em></div>
+      </div>
+    </div>
+
+    <!-- Bảng chi tiết hàng hóa -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13.5px;">
+      <thead>
+        <tr style="background:#f1f5f9;border-top:2px solid #0f172a;border-bottom:2px solid #0f172a;">
+          <th style="padding:11px 10px;text-align:center;width:40px;font-weight:800;color:#0f172a;">STT</th>
+          <th style="padding:11px 12px;text-align:left;font-weight:800;color:#0f172a;">Tên sản phẩm / Quy cách đóng gói</th>
+          <th style="padding:11px 10px;text-align:center;width:70px;font-weight:800;color:#0f172a;">ĐVT</th>
+          <th style="padding:11px 10px;text-align:center;width:80px;font-weight:800;color:#0f172a;">Số lượng</th>
+          <th style="padding:11px 12px;text-align:right;width:120px;font-weight:800;color:#0f172a;">Đơn giá</th>
+          <th style="padding:11px 12px;text-align:right;width:130px;font-weight:800;color:#0f172a;">Thành tiền</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #cbd5e1;">
+          <td style="text-align:center;padding:12px 10px;">1</td>
+          <td style="padding:12px 12px;">
+            <strong style="color:#0f172a;font-size:14px;">${escapeHtml(itemName)}</strong>
+            ${c.kg && !combo ? `<div style="font-size:12px;color:#64748b;margin-top:2px;">Khối lượng tịnh: ${c.kg} ${unit}</div>` : ''}
+          </td>
+          <td style="text-align:center;padding:12px 10px;">${escapeHtml(unit)}</td>
+          <td style="text-align:center;padding:12px 10px;font-weight:800;color:#0f172a;font-size:14px;">${combo ? 1 : (c.kg || 1)}</td>
+          <td style="text-align:right;padding:12px 12px;">${formatVND(unitPrice)}</td>
+          <td style="text-align:right;padding:12px 12px;font-weight:800;color:#0f172a;font-size:14px;">${formatVND(c.price || 0)}</td>
+        </tr>
+        ${giftRow}
+      </tbody>
+    </table>
+
+    <!-- Tổng kết thanh toán -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-top:1.5px solid #cbd5e1;padding-top:14px;">
+      <div style="font-size:13px;max-width:340px;">
+        <div style="font-weight:800;color:#0f172a;margin-bottom:5px;">Trạng thái thanh toán:</div>
+        <div style="display:inline-block;padding:5px 12px;border-radius:6px;font-weight:800;font-size:13px;${isPaid ? 'background:#dcfce7;color:#14532d;border:1.5px solid #86efac;' : 'background:#fef3c7;color:#78350f;border:1.5px solid #fcd34d;'}">
+          ${isPaid ? '✅ ĐÃ THANH TOÁN ĐỦ' : '🕒 CHƯA THANH TOÁN (CÔNG NỢ)'}
+        </div>
+        <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.45;">
+          * Quý khách vui lòng kiểm tra kỹ số lượng và chất lượng sản phẩm trước khi nhận hàng.
+        </div>
+      </div>
+      <div style="text-align:right;min-width:260px;">
+        <div style="display:flex;justify-content:space-between;font-size:13.5px;color:#475569;margin-bottom:6px;">
+          <span>Tổng tiền hàng:</span>
+          <strong style="color:#0f172a;">${formatVND(c.price || 0)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13.5px;color:#475569;margin-bottom:6px;">
+          <span>Phí vận chuyển:</span>
+          <strong style="color:#059669;">Miễn phí (0đ)</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:900;color:#1d4ed8;border-top:2px solid #2563eb;padding-top:8px;margin-top:6px;">
+          <span>TỔNG CỘNG:</span>
+          <span>${formatVND(c.price || 0)}</span>
+        </div>
+      </div>
+    </div>
+
+    ${signaturesHtml}
+
+    <!-- Lời cảm ơn -->
+    <div style="text-align:center;font-size:12.5px;color:#64748b;margin-top:24px;border-top:1px solid #f1f5f9;padding-top:12px;font-style:italic;">
+      Vị Nguyên Food chân thành cảm ơn Quý khách! Kính chúc Quý khách bữa cơm ngon miệng và nhiều sức khỏe!
+    </div>
+  </div>
+  `;
+}
+
+function showInvoiceModal(c){
+  if(!c) return;
+  currentInvoiceCustomer = c;
+
+  // Xóa dứt điểm nếu còn sót phần tử cũ trong DOM do trình duyệt lưu cache
+  const oldTopExport = document.getElementById('exportPdfBtn');
+  if(oldTopExport && oldTopExport.parentElement) oldTopExport.parentElement.remove();
+  const oldPrintRadio = document.getElementById('invoicePreviewPrint');
+  if(oldPrintRadio) {
+    const bar = oldPrintRadio.closest('.no-print');
+    if(bar) bar.remove();
+  }
+
+  const area = document.getElementById('invoiceContentArea');
+  if(area){
+    area.innerHTML = generateInvoiceHtml(c, { includeSignatures: false });
+  }
+  const title = document.getElementById('invoiceModalTitle');
+  if(title) title.textContent = '🧾 Hóa đơn bán hàng — ' + c.name;
+  const modal = document.getElementById('invoiceModalOverlay');
+  if(modal) modal.classList.add('active');
+}
+
+function closeInvoiceModal(){
+  currentInvoiceCustomer = null;
+  const modal = document.getElementById('invoiceModalOverlay');
+  if(modal) modal.classList.remove('active');
+}
+
+function openPrintWindow(c, options = {}){
+  const includeSignatures = (options.includeSignatures !== undefined) ? !!options.includeSignatures : true;
+  const isExport = !!options.isExport;
+  const invoiceHtml = generateInvoiceHtml(c, { includeSignatures });
+  const printWindow = window.open('', '_blank', 'width=880,height=920');
+  if(!printWindow){
+    showInvoiceModal(c);
+    return;
+  }
+  const cleanName = (c.name || 'Khach_Hang').replace(/[^\w\s\u00C0-\u1EF9]/gi, '').trim().replace(/\s+/g, '_');
+  const title = isExport ? `Xuat_Hoa_don_${cleanName}_HD${c.id}` : `In_Hoa_don_${cleanName}_HD${c.id}`;
+
+  const bannerText = isExport
+    ? '💡 <strong>Hóa đơn xuất file (đã bỏ chữ ký):</strong> Vui lòng chọn <strong>"Save as PDF" (Lưu dưới dạng PDF)</strong> tại mục Máy in để lưu file gửi khách.'
+    : '💡 <strong>Hóa đơn in giấy (có chữ ký):</strong> Chọn máy in của bạn để in ra giấy cho shipper giao hàng và ký nhận.';
+
+  const actionBtnText = isExport ? '📥 Lưu file PDF' : '🖨️ In ra giấy';
+
+  printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 12mm 15mm;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      color: #0f172a;
+      background: #ffffff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .invoice-paper {
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom:18px;padding:12px 18px;background:${isExport ? '#ecfdf5' : '#eff6ff'};border:1.5px solid ${isExport ? '#a7f3d0' : '#bfdbfe'};border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:13.5px;font-weight:600;color:${isExport ? '#065f46' : '#1e40af'};">${bannerText}</span>
+    <button onclick="window.print()" style="background:${isExport ? '#059669' : '#2563eb'};color:#fff;border:none;padding:9px 20px;border-radius:7px;font-weight:700;cursor:pointer;font-size:13.5px;box-shadow:0 2px 4px rgba(0,0,0,0.15);">${actionBtnText}</button>
+  </div>
+  ${invoiceHtml}
+  <script>
+    window.onload = function(){
+      setTimeout(function(){ window.print(); }, 350);
+    };
+  </script>
+</body>
+</html>`);
+  printWindow.document.close();
+}
+
+function printInvoice(c){
+  if(!c) c = currentInvoiceCustomer;
+  if(!c) return;
+  // In ra giấy -> Bắt buộc có phần chữ ký, mở cửa sổ in ấn
+  openPrintWindow(c, { includeSignatures: true, isExport: false });
+}
+
+let cachedLogoBase64 = null;
+async function getLogoBase64() {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const res = await fetch('/assets/logo.png');
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        cachedLogoBase64 = reader.result;
+        resolve(cachedLogoBase64);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+async function generatePdfWithPdfMake(c){
+  if(!window.pdfMake){
+    openPrintWindow(c, { includeSignatures: false, isExport: true });
+    return;
+  }
+  if(window.pdfFonts && window.pdfFonts.pdfMake){
+    window.pdfMake.vfs = window.pdfFonts.pdfMake.vfs;
+  } else if(window.pdfFonts && window.pdfFonts.vfs){
+    window.pdfMake.vfs = window.pdfFonts.vfs;
+  }
+
+  const logoBase64 = await getLogoBase64();
+  const product = c.productId ? products.find(p=>p.id===c.productId) : null;
+  const combo = c.comboId ? combos.find(x=>x.id===c.comboId) : null;
+  const giftProduct = (combo && combo.giftProductId) ? products.find(p=>p.id===combo.giftProductId) : null;
+  const staffName = c.staff ? (staffLabel[c.staff] || c.staff) : 'Cửa hàng';
+  const orderDate = c.lastOrderDate ? formatDateVN(c.lastOrderDate) : formatDateTimeVN(c.createdAt || Date.now());
+  const invoiceCode = 'HD-' + String(c.id).padStart(5, '0');
+  const isPaid = c.paymentStatus !== 'chua_tra';
+
+  let itemName = 'Sản phẩm gạo / nông sản';
+  let unit = 'kg';
+  let unitPrice = (c.kg && Number(c.kg) > 0) ? Math.round(Number(c.price) / Number(c.kg)) : Number(c.price);
+
+  if(combo){
+    itemName = 'Combo: ' + combo.name;
+    unit = 'combo';
+    unitPrice = Number(c.price);
+  } else if(product){
+    itemName = product.name;
+    unit = product.unit || 'kg';
+  }
+
+  const tableBody = [
+    [
+      { text: 'STT', bold: true, alignment: 'center', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
+      { text: 'Tên sản phẩm / Quy cách đóng gói', bold: true, fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
+      { text: 'ĐVT', bold: true, alignment: 'center', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
+      { text: 'Số lượng', bold: true, alignment: 'center', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
+      { text: 'Đơn giá', bold: true, alignment: 'right', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
+      { text: 'Thành tiền', bold: true, alignment: 'right', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] }
+    ],
+    [
+      { text: '1', alignment: 'center', margin: [0, 6, 0, 6] },
+      {
+        stack: [
+          { text: itemName, bold: true, color: '#0f172a', fontSize: 10 },
+          (c.kg && !combo) ? { text: `Quy cách đóng gói: ${c.kg} ${unit}`, fontSize: 8.5, color: '#64748b', margin: [0, 2, 0, 0] } : { text: '' }
+        ],
+        margin: [0, 6, 0, 6]
+      },
+      { text: unit, alignment: 'center', margin: [0, 6, 0, 6] },
+      { text: String(combo ? 1 : (c.kg || 1)), alignment: 'center', bold: true, margin: [0, 6, 0, 6] },
+      { text: formatVND(unitPrice), alignment: 'right', margin: [0, 6, 0, 6] },
+      { text: formatVND(c.price || 0), alignment: 'right', bold: true, margin: [0, 6, 0, 6], color: '#0f172a' }
+    ]
+  ];
+
+  if(combo && giftProduct && combo.giftQty){
+    tableBody.push([
+      { text: '2', alignment: 'center', margin: [0, 5, 0, 5] },
+      {
+        stack: [
+          { text: `Quà tặng kèm: ${giftProduct.name}`, bold: true, color: '#0f172a' },
+          { text: `(Ưu đãi kèm theo combo "${combo.name}")`, fontSize: 8, color: '#64748b' }
+        ],
+        margin: [0, 5, 0, 5]
+      },
+      { text: giftProduct.unit || 'cái', alignment: 'center', margin: [0, 5, 0, 5] },
+      { text: String(combo.giftQty), alignment: 'center', bold: true, margin: [0, 5, 0, 5] },
+      { text: '0đ', alignment: 'right', margin: [0, 5, 0, 5] },
+      { text: '0đ (Miễn phí)', alignment: 'right', bold: true, color: '#16a34a', margin: [0, 5, 0, 5] }
+    ]);
+  }
+
+  const cleanName = (c.name || 'Khach_Hang').replace(/[^\w\s\u00C0-\u1EF9]/gi, '').trim().replace(/\s+/g, '_');
+  const filename = `Hoa_don_${cleanName}_HD${c.id}.pdf`;
+
+  const headerColumns = [];
+  if(logoBase64){
+    headerColumns.push({
+      width: 58,
+      image: logoBase64,
+      fit: [50, 50]
+    });
+  }
+  headerColumns.push({
+    width: '*',
+    margin: [logoBase64 ? 10 : 0, 0, 0, 0],
+    stack: [
+      { text: 'VỊ NGUYÊN FOOD', fontSize: 18, bold: true, color: '#0f172a' },
+      { text: 'Từ giọt phù sa đến bàn ăn người Việt', fontSize: 10, bold: true, italics: true, color: '#d97706', margin: [0, 2, 0, 0] },
+      { text: 'Hotline / Zalo: 0907.441.019  •  Giao hàng tận nơi', fontSize: 9, color: '#64748b', margin: [0, 2, 0, 0] }
+    ]
+  });
+  headerColumns.push({
+    width: 'auto',
+    alignment: 'right',
+    stack: [
+      { text: 'HÓA ĐƠN BÁN HÀNG', fontSize: 19, bold: true, color: '#2563eb' },
+      { text: `Mã hóa đơn: ${invoiceCode}`, fontSize: 10, bold: true, color: '#0f172a', margin: [0, 3, 0, 0] },
+      { text: `Ngày lập: ${orderDate}`, fontSize: 9, color: '#64748b', margin: [0, 2, 0, 0] }
+    ]
+  });
+
+  const docDefinition = {
+    pageSize: 'A4',
+    pageMargins: [36, 36, 36, 36],
+    content: [
+      {
+        columns: headerColumns
+      },
+      { canvas: [{ type: 'line', x1: 0, y1: 14, x2: 523, y2: 14, lineWidth: 2, lineColor: '#0f172a' }] },
+      { text: '', margin: [0, 12, 0, 0] },
+      {
+        table: {
+          widths: ['52%', '48%'],
+          body: [
+            [
+              {
+                fillColor: '#f8fafc',
+                margin: [10, 8, 10, 8],
+                stack: [
+                  { text: 'KHÁCH HÀNG (NGƯỜI NHẬN)', fontSize: 8, bold: true, color: '#64748b' },
+                  { text: c.name || 'Khách vãng lai', fontSize: 13, bold: true, color: '#0f172a', margin: [0, 4, 0, 0] },
+                  {
+                    columns: [
+                      { text: 'SĐT:', fontSize: 10, bold: true, color: '#1d4ed8', width: 35 },
+                      { text: c.phone || '—', fontSize: 10, bold: true, color: '#1d4ed8' }
+                    ],
+                    margin: [0, 3, 0, 0]
+                  },
+                  { text: `Địa chỉ: ${c.address || 'Tại cửa hàng'}`, fontSize: 9.5, color: '#334155', margin: [0, 3, 0, 0] }
+                ]
+              },
+              {
+                fillColor: '#f8fafc',
+                margin: [10, 8, 10, 8],
+                stack: [
+                  { text: 'THÔNG TIN ĐƠN HÀNG', fontSize: 8, bold: true, color: '#64748b' },
+                  { text: `Nhân viên tư vấn: ${staffName}`, fontSize: 9.5, color: '#334155', margin: [0, 4, 0, 0] },
+                  { text: `Ngày giao dự kiến: ${c.deliveryDate ? formatDateVN(c.deliveryDate) : 'Giao ngay'}`, fontSize: 9.5, color: '#334155', margin: [0, 3, 0, 0] },
+                  { text: `Ghi chú: ${c.note || 'Không có'}`, fontSize: 9.5, italics: true, color: '#64748b', margin: [0, 3, 0, 0] }
+                ]
+              }
+            ]
+          ]
+        },
+        layout: {
+          hLineWidth: () => 1,
+          vLineWidth: () => 1,
+          hLineColor: () => '#cbd5e1',
+          vLineColor: () => '#cbd5e1'
+        }
+      },
+      { text: '', margin: [0, 12, 0, 0] },
+      {
+        table: {
+          headerRows: 1,
+          widths: [32, '*', 45, 55, 80, 90],
+          body: tableBody
+        },
+        layout: {
+          hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length) ? 2 : 0.5,
+          vLineWidth: () => 0,
+          hLineColor: (i, node) => (i === 0 || i === 1 || i === node.table.body.length) ? '#0f172a' : '#cbd5e1'
+        }
+      },
+      { text: '', margin: [0, 14, 0, 0] },
+      {
+        columns: [
+          {
+            width: '52%',
+            stack: [
+              { text: 'Trạng thái thanh toán:', fontSize: 9.5, bold: true, color: '#0f172a' },
+              {
+                margin: [0, 4, 0, 0],
+                table: {
+                  body: [[
+                    isPaid
+                      ? {
+                          text: '● ĐÃ THANH TOÁN ĐỦ',
+                          bold: true,
+                          fontSize: 9,
+                          color: '#15803d',
+                          fillColor: '#dcfce7',
+                          margin: [8, 4, 8, 4]
+                        }
+                      : {
+                          text: '● CHƯA THANH TOÁN (CÔNG NỢ)',
+                          bold: true,
+                          fontSize: 9,
+                          color: '#9a3412',
+                          fillColor: '#fef3c7',
+                          margin: [8, 4, 8, 4]
+                        }
+                  ]]
+                },
+                layout: {
+                  hLineWidth: () => 1,
+                  vLineWidth: () => 1,
+                  hLineColor: () => isPaid ? '#22c55e' : '#f59e0b',
+                  vLineColor: () => isPaid ? '#22c55e' : '#f59e0b'
+                }
+              },
+              { text: '* Quý khách vui lòng kiểm tra kỹ số lượng và chất lượng sản phẩm trước khi nhận hàng.', fontSize: 8, color: '#64748b', margin: [0, 8, 0, 0] }
+            ]
+          },
+          {
+            width: '48%',
+            stack: [
+              {
+                columns: [
+                  { text: 'Tổng tiền hàng:', fontSize: 10, color: '#475569' },
+                  { text: formatVND(c.price || 0), fontSize: 10, bold: true, color: '#0f172a', alignment: 'right' }
+                ]
+              },
+              {
+                columns: [
+                  { text: 'Phí vận chuyển:', fontSize: 10, color: '#475569', margin: [0, 4, 0, 0] },
+                  { text: 'Miễn phí (0đ)', fontSize: 10, bold: true, color: '#059669', alignment: 'right', margin: [0, 4, 0, 0] }
+                ]
+              },
+              { canvas: [{ type: 'line', x1: 0, y1: 8, x2: 245, y2: 8, lineWidth: 2, lineColor: '#2563eb' }] },
+              {
+                columns: [
+                  { text: 'TỔNG CỘNG:', fontSize: 14, bold: true, color: '#1d4ed8', margin: [0, 10, 0, 0] },
+                  { text: formatVND(c.price || 0), fontSize: 14, bold: true, color: '#1d4ed8', alignment: 'right', margin: [0, 10, 0, 0] }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      { text: '', margin: [0, 24, 0, 0] },
+      {
+        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 523, y2: 0, lineWidth: 0.5, lineColor: '#e2e8f0' }]
+      },
+      {
+        text: 'Vị Nguyên Food chân thành cảm ơn Quý khách! Kính chúc Quý khách bữa cơm ngon miệng và nhiều sức khỏe!',
+        fontSize: 9,
+        italics: true,
+        color: '#64748b',
+        alignment: 'center',
+        margin: [0, 10, 0, 0]
+      }
+    ],
+    defaultStyle: {
+      font: 'Roboto',
+      fontSize: 9.5
+    }
+  };
+
+  try {
+    window.pdfMake.createPdf(docDefinition).download(filename);
+    if(typeof appAlert === 'function') {
+      appAlert(`Đã xuất và tải file PDF "${filename}" về máy thành công!`, {type:'info', title:'Xuất file PDF'});
+    }
+  } catch(e) {
+    console.error('pdfMake download error:', e);
+    openPrintWindow(c, { includeSignatures: false, isExport: true });
+  }
+}
+
+async function exportPdf(c){
+  if(!c) c = currentInvoiceCustomer;
+  if(!c) return;
+  const btn = document.getElementById('exportPdfBtnBottom');
+  const origHtml = btn ? btn.innerHTML : '';
+  if(btn) btn.innerHTML = '⏳ Đang tạo file PDF...';
+  try {
+    await generatePdfWithPdfMake(c);
+  } finally {
+    if(btn) btn.innerHTML = origHtml;
+  }
+}
+// ================= /HỆ THỐNG XUẤT HÓA ĐƠN =================
+
 function startEditCustomer(id){
   const c = customers.find(x=>x.id===id);
   if(!c) return;
@@ -1361,7 +2131,7 @@ function startEditCustomer(id){
   applyComboToCustomerForm();
   document.getElementById('custFormTitle').textContent = '✏️ Sửa khách hàng';
   document.getElementById('addCustomerBtn').textContent = 'Lưu thay đổi';
-  document.getElementById('cancelEditBtn').style.display = 'block';
+  document.getElementById('cancelEditBtn').style.display = 'inline-flex';
   openCustomerModal();
   document.getElementById('cName').focus();
 }
@@ -1409,7 +2179,7 @@ function resetCustomerForm(){
   applyComboToCustomerForm();
   document.getElementById('custFormTitle').textContent = '👤 Thêm khách hàng';
   document.getElementById('addCustomerBtn').textContent = 'Lưu khách hàng';
-  document.getElementById('cancelEditBtn').style.display = 'none';
+  document.getElementById('cancelEditBtn').style.display = 'inline-flex';
 }
 
 function populateComboSelect(){
@@ -1485,7 +2255,7 @@ function startEditCombo(id){
   setComboOfferType(c.offerType || 'percent');
   document.getElementById('comboFormTitle').textContent = '✏️ Sửa combo';
   document.getElementById('addComboBtn').textContent = 'Lưu thay đổi';
-  document.getElementById('cancelComboEditBtn').style.display = 'block';
+  document.getElementById('cancelComboEditBtn').style.display = 'inline-flex';
   document.getElementById('koName').focus();
   updateComboCalc();
 }
@@ -1505,7 +2275,7 @@ function resetComboForm(){
   setComboOfferType('percent');
   document.getElementById('comboFormTitle').textContent = '🎁 Tạo combo ưu đãi';
   document.getElementById('addComboBtn').textContent = 'Lưu combo';
-  document.getElementById('cancelComboEditBtn').style.display = 'none';
+  document.getElementById('cancelComboEditBtn').style.display = 'inline-flex';
   updateComboCalc();
 }
 
@@ -1781,6 +2551,17 @@ document.getElementById('addCustomerBtn').addEventListener('click', async ()=>{
   resetCustomerForm();
   closeCustomerModal();
   await loadAllData();
+
+  // Tự động xuất hóa đơn nếu là thêm khách mới hoặc mua lại (đơn mới) có giá trị
+  const hasOrder = (payload.price && Number(payload.price) > 0) || (payload.kg && Number(payload.kg) > 0);
+  if(!editingCustomerId && hasOrder){
+    const targetCust = (savedRecord && savedRecord.id)
+      ? (customers.find(x => x.id === savedRecord.id) || savedRecord)
+      : customers[0];
+    if(targetCust){
+      showInvoiceModal(targetCust);
+    }
+  }
 });
 
 document.getElementById('openAddCustomerBtn').addEventListener('click', ()=>{
@@ -1858,24 +2639,24 @@ function applyComboToCustomerForm(){
 document.getElementById('cCombo').addEventListener('change', applyComboToCustomerForm);
 
 document.getElementById('cancelEditBtn').addEventListener('click', closeCustomerModal);
-document.getElementById('custSearch').addEventListener('input', render);
-document.getElementById('custFilterType').addEventListener('change', render);
-document.getElementById('custFilterStaff').addEventListener('change', render);
-document.getElementById('custFilterPayment').addEventListener('change', render);
-document.getElementById('custFilterPacked').addEventListener('change', render);
-document.getElementById('custFilterDelivered').addEventListener('change', render);
-document.getElementById('cskhSearch').addEventListener('input', render);
-document.getElementById('cskhFilterType').addEventListener('change', render);
-document.getElementById('cskhFilterStaff').addEventListener('change', render);
-document.getElementById('cskhFilterPayment').addEventListener('change', render);
-document.getElementById('cskhFilterPacked').addEventListener('change', render);
-document.getElementById('cskhFilterDelivered').addEventListener('change', render);
+document.getElementById('custSearch').addEventListener('input', ()=>{ paginationState.order = 1; render(); });
+document.getElementById('custFilterType').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
+document.getElementById('custFilterStaff').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
+document.getElementById('custFilterPayment').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
+document.getElementById('custFilterPacked').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
+document.getElementById('custFilterDelivered').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
+document.getElementById('cskhSearch').addEventListener('input', ()=>{ paginationState.cskh = 1; render(); });
+document.getElementById('cskhFilterType').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+document.getElementById('cskhFilterStaff').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+document.getElementById('cskhFilterPayment').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+document.getElementById('cskhFilterPacked').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+document.getElementById('cskhFilterDelivered').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
 
-document.getElementById('orderSearch').addEventListener('input', render);
-document.getElementById('orderFilterStaff').addEventListener('change', render);
-document.getElementById('orderFilterPayment').addEventListener('change', render);
-document.getElementById('orderFromDate').addEventListener('change', render);
-document.getElementById('orderToDate').addEventListener('change', render);
+document.getElementById('orderSearch').addEventListener('input', ()=>{ paginationState.orders = 1; render(); });
+document.getElementById('orderFilterStaff').addEventListener('change', ()=>{ paginationState.orders = 1; render(); });
+document.getElementById('orderFilterPayment').addEventListener('change', ()=>{ paginationState.orders = 1; render(); });
+document.getElementById('orderFromDate').addEventListener('change', ()=>{ paginationState.orders = 1; render(); });
+document.getElementById('orderToDate').addEventListener('change', ()=>{ paginationState.orders = 1; render(); });
 document.getElementById('orderTodayBtn').addEventListener('click', ()=>{
   const todayKey = dateKeyFromTimestamp(Date.now());
   document.getElementById('orderFromDate').value = todayKey;
@@ -2023,11 +2804,11 @@ document.getElementById('addStockEntryBtn').addEventListener('click', async ()=>
   await loadAllData();
 });
 document.getElementById('cancelStockEditBtn').addEventListener('click', closeStockModal);
-document.getElementById('whSearch').addEventListener('input', renderStockLedger);
-document.getElementById('whFilterType').addEventListener('change', renderStockLedger);
-document.getElementById('whFilterProduct').addEventListener('change', renderStockLedger);
-document.getElementById('whFilterFrom').addEventListener('change', renderStockLedger);
-document.getElementById('whFilterTo').addEventListener('change', renderStockLedger);
+document.getElementById('whSearch').addEventListener('input', ()=>{ paginationState.stock = 1; renderStockLedger(); });
+document.getElementById('whFilterType').addEventListener('change', ()=>{ paginationState.stock = 1; renderStockLedger(); });
+document.getElementById('whFilterProduct').addEventListener('change', ()=>{ paginationState.stock = 1; renderStockLedger(); });
+document.getElementById('whFilterFrom').addEventListener('change', ()=>{ paginationState.stock = 1; renderStockLedger(); });
+document.getElementById('whFilterTo').addEventListener('change', ()=>{ paginationState.stock = 1; renderStockLedger(); });
 document.getElementById('exportWhExcelBtn').addEventListener('click', exportWarehouseExcel);
 
 document.getElementById('exportCfExcelBtn').addEventListener('click', exportCashflowExcel);
@@ -2102,10 +2883,10 @@ document.getElementById('closeExpenseModal').addEventListener('click', closeExpe
 document.getElementById('expenseModalOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'expenseModalOverlay') closeExpenseModal();
 });
-document.getElementById('cfSearch').addEventListener('input', renderCashflow);
-document.getElementById('cfFilterKind').addEventListener('change', renderCashflow);
-document.getElementById('cfFilterFrom').addEventListener('change', renderCashflow);
-document.getElementById('cfFilterTo').addEventListener('change', renderCashflow);
+document.getElementById('cfSearch').addEventListener('input', ()=>{ paginationState.cashflow = 1; renderCashflow(); });
+document.getElementById('cfFilterKind').addEventListener('change', ()=>{ paginationState.cashflow = 1; renderCashflow(); });
+document.getElementById('cfFilterFrom').addEventListener('change', ()=>{ paginationState.cashflow = 1; renderCashflow(); });
+document.getElementById('cfFilterTo').addEventListener('change', ()=>{ paginationState.cashflow = 1; renderCashflow(); });
 
 /* ===== Đăng nhập / Đăng ký / Phân quyền ===== */
 
@@ -2271,7 +3052,13 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>{
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   showLoginForm();
-  showAuth();
+  
+fixAutofilledCredentials();
+setupDefaultCredentialsHelper();
+setTimeout(fixAutofilledCredentials, 100);
+setTimeout(fixAutofilledCredentials, 400);
+setTimeout(fixAutofilledCredentials, 1000);
+showAuth();
 });
 
 document.getElementById('confirmTransferBtn').addEventListener('click', async ()=>{
@@ -2298,6 +3085,54 @@ document.getElementById('whDate').value = new Date().toISOString().slice(0,10);
 setStockType('nhap');
 setComboOfferType('percent');
 
+
+/* ================= TÍNH NĂNG XUẤT DỮ LIỆU JSON ================= */
+// Xuất file JSON theo từng category hoặc toàn bộ
+async function exportCategoryJson(category) {
+  try {
+    const data = await CrmApi.dataImport.exportJson(category);
+    let fileName = 'crm_data.json';
+    if (category === 'customers') fileName = 'customers.json';
+    else if (category === 'combos') fileName = 'combos.json';
+    else if (category === 'products') fileName = 'products.json';
+    else if (category === 'stock-entries') fileName = 'stock-entries.json';
+    else if (category === 'expenses') fileName = 'expenses.json';
+    else fileName = `crm_saoluu_${new Date().toISOString().slice(0, 10)}.json`;
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    appAlert(`Đã xuất file ${fileName} thành công!`, { title: 'Xuất dữ liệu' });
+  } catch (err) {
+    appAlert('Không thể xuất dữ liệu: ' + err.message, { type: 'danger', title: 'Lỗi xuất dữ liệu' });
+  }
+}
+
+// Gắn sự kiện cho các nút Xuất JSON
+function setupImportExportEvents() {
+  const exportCust = document.getElementById('exportFullJsonBtn');
+  if (exportCust) exportCust.addEventListener('click', () => exportCategoryJson('customers'));
+
+  const exportOrders = document.getElementById('exportOrdersJsonBtn');
+  if (exportOrders) exportOrders.addEventListener('click', () => exportCategoryJson('customers'));
+
+  const exportCskh = document.getElementById('exportCskhJsonBtn');
+  if (exportCskh) exportCskh.addEventListener('click', () => exportCategoryJson('customers'));
+
+  const exportCombos = document.getElementById('exportCombosJsonBtn');
+  if (exportCombos) exportCombos.addEventListener('click', () => exportCategoryJson('combos'));
+
+  const exportProducts = document.getElementById('exportProductsJsonBtn');
+  if (exportProducts) exportProducts.addEventListener('click', () => exportCategoryJson('products'));
+}
+setupImportExportEvents();
+
 initEmptyUI();
 showAuth();
 
@@ -2315,3 +3150,44 @@ document.addEventListener('click', function(e){
   btn.appendChild(dot);
   setTimeout(()=>dot.remove(), 600);
 });
+
+
+// Event listeners cho modal hóa đơn
+if(document.getElementById('closeInvoiceModal')){
+  document.getElementById('closeInvoiceModal').addEventListener('click', closeInvoiceModal);
+}
+if(document.getElementById('closeInvoiceBtn')){
+  document.getElementById('closeInvoiceBtn').addEventListener('click', closeInvoiceModal);
+}
+// Nút in hóa đơn ra giấy (có chữ ký)
+if(document.getElementById('printInvoiceBtn')){
+  document.getElementById('printInvoiceBtn').addEventListener('click', ()=> printInvoice(currentInvoiceCustomer));
+}
+if(document.getElementById('printInvoiceBtnBottom')){
+  document.getElementById('printInvoiceBtnBottom').addEventListener('click', ()=> printInvoice(currentInvoiceCustomer));
+}
+// Nút xuất file PDF (KHÔNG có chữ ký)
+if(document.getElementById('exportPdfBtn')){
+  document.getElementById('exportPdfBtn').addEventListener('click', ()=> exportPdf(currentInvoiceCustomer));
+}
+if(document.getElementById('exportPdfBtnBottom')){
+  document.getElementById('exportPdfBtnBottom').addEventListener('click', ()=> exportPdf(currentInvoiceCustomer));
+}
+// Chuyển đổi chế độ xem trước (có chữ ký vs không chữ ký)
+if(document.getElementById('invoicePreviewPrint')){
+  document.getElementById('invoicePreviewPrint').addEventListener('change', ()=>{
+    invoicePreviewIncludeSignatures = true;
+    updateInvoicePreview();
+  });
+}
+if(document.getElementById('invoicePreviewExport')){
+  document.getElementById('invoicePreviewExport').addEventListener('change', ()=>{
+    invoicePreviewIncludeSignatures = false;
+    updateInvoicePreview();
+  });
+}
+if(document.getElementById('invoiceModalOverlay')){
+  document.getElementById('invoiceModalOverlay').addEventListener('click', (e)=>{
+    if(e.target.id === 'invoiceModalOverlay') closeInvoiceModal();
+  });
+}

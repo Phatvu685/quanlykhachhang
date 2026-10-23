@@ -1,5 +1,13 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import { CombosService } from './combos.service';
 import { CreateComboDto } from './dto/create-combo.dto';
@@ -31,7 +39,10 @@ export class CombosController {
 
   @Patch(':id')
   @Roles('admin')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateComboDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateComboDto,
+  ) {
     return this.combosService.update(id, dto);
   }
 

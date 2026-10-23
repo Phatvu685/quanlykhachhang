@@ -75,14 +75,23 @@ export class CombosService {
     return (Number(baseKg) || 0) * (Number(unitPrice) || 0);
   }
 
-  private comboTotalKg(baseKg: number, offerType: string, offerValue: number): number {
+  private comboTotalKg(
+    baseKg: number,
+    offerType: string,
+    offerValue: number,
+  ): number {
     const base = Number(baseKg) || 0;
     // Nếu ưu đãi kiểu "tặng thêm kg" -> tổng kg khách nhận = gốc + phần tặng
     if (offerType === 'kg') return base + (Number(offerValue) || 0);
     return base;
   }
 
-  private comboFinalPrice(baseKg: number, unitPrice: number, offerType: string, offerValue: number): number {
+  private comboFinalPrice(
+    baseKg: number,
+    unitPrice: number,
+    offerType: string,
+    offerValue: number,
+  ): number {
     const base = this.comboBasePrice(baseKg, unitPrice);
     const val = Number(offerValue) || 0;
     if (offerType === 'percent') return Math.max(0, base * (1 - val / 100)); // giảm theo %
@@ -91,14 +100,24 @@ export class CombosService {
   }
 
   // Gom 3 hàm trên lại, trả về object để spread (...) thẳng vào response
-  private computeDerivedFields(c: { baseKg: any; unitPrice: any; offerType: string; offerValue: any }) {
+  private computeDerivedFields(c: {
+    baseKg: any;
+    unitPrice: any;
+    offerType: string;
+    offerValue: any;
+  }) {
     const baseKg = Number(c.baseKg);
     const unitPrice = Number(c.unitPrice);
     const offerValue = Number(c.offerValue);
     return {
       basePrice: this.comboBasePrice(baseKg, unitPrice),
       totalKg: this.comboTotalKg(baseKg, c.offerType, offerValue),
-      finalPrice: this.comboFinalPrice(baseKg, unitPrice, c.offerType, offerValue),
+      finalPrice: this.comboFinalPrice(
+        baseKg,
+        unitPrice,
+        c.offerType,
+        offerValue,
+      ),
     };
   }
 }

@@ -1,5 +1,13 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import { StockEntriesService } from './stock-entries.service';
 import { CreateStockEntryDto } from './dto/create-stock-entry.dto';
@@ -31,7 +39,10 @@ export class StockEntriesController {
 
   @Patch(':id')
   @Roles('admin')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateStockEntryDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStockEntryDto,
+  ) {
     return this.stockEntriesService.update(id, dto);
   }
 

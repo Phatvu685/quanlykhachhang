@@ -25,11 +25,14 @@ const bodyMarkup = `
       <h1>🔐 Đăng nhập</h1>
       <div class="auth-sub">Quản Lý Khách Hàng — Vị Nguyên Food</div>
       <label for="loginUser">Tên đăng nhập</label>
-      <input id="loginUser" placeholder="admin">
+      <input id="loginUser" placeholder="admin" autocomplete="off" spellcheck="false">
       <label for="loginPass">Mật khẩu</label>
-      <input id="loginPass" type="password" placeholder="••••••••">
+      <input id="loginPass" type="password" placeholder="••••••••" autocomplete="new-password">
       <div class="auth-error" id="loginError">Sai tên đăng nhập hoặc mật khẩu.</div>
       <button class="btn" id="loginBtn">Đăng nhập</button>
+      <div style="margin-top:12px;font-size:12px;color:var(--text-light,#526b7e);text-align:center;">
+        💡 Tài khoản mặc định: <a id="fillDefaultAdminBtn" style="color:var(--accent,#1a6b9a);font-weight:600;cursor:pointer;text-decoration:underline;">admin / admin123</a> (bấm để điền)
+      </div>
       <div class="auth-switch">Chưa có tài khoản? <a id="goRegister">Đăng ký ngay</a></div>
       <div class="auth-switch" style="margin-top:4px;font-size:12px;opacity:0.8">
         <a id="openServerConfig">⚙️ Đổi địa chỉ máy chủ</a>
@@ -63,9 +66,10 @@ const bodyMarkup = `
   <div class="sticky-head">
   <header>
     <div class="brand">
-      <div class="brand-mark"><img src="/assets/logo.png" alt="Vị Nguyên Food" style="width:100%;height:100%;object-fit:cover;border-radius:9px;"></div>
-      <div>
-        <h1>Quản Lý Khách Hàng — Vị Nguyên Food</h1>
+      <div class="brand-mark"><img src="/assets/logo.png" alt="Vị Nguyên Food"></div>
+      <div class="brand-info">
+        <h1>Quản Lý Khách Hàng <span class="brand-highlight">— VỊ NGUYÊN FOOD</span></h1>
+        <div class="brand-slogan">Từ giọt phù sa đến bàn ăn người Việt</div>
       </div>
     </div>
     <div class="header-right">
@@ -98,18 +102,21 @@ const bodyMarkup = `
   <div class="view active" id="view-customers">
   <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
     <h2 style="margin:0;">Danh sách khách hàng — đã phát sinh đơn</h2>
-    <button class="btn" id="openAddCustomerBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khách hàng</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-secondary export-btn" id="exportFullJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
+      <button class="btn" id="openAddCustomerBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khách hàng</button>
+    </div>
   </div>
   <div class="card">
       <div class="toolbar">
-        <input id="custSearch" placeholder="Tìm theo tên hoặc SĐT...">
-        <select id="custFilterType">
+        <input id="custSearch" placeholder="🔍 Tìm theo tên hoặc SĐT..." style="min-width:200px;">
+        <select id="custFilterType" style="min-width:125px;">
           <option value="">Tất cả phân loại</option>
           <option value="moi">Khách mới</option>
           <option value="cu">Khách cũ</option>
           <option value="tiemnang">Khách tiềm năng</option>
         </select>
-        <select id="custFilterStaff">
+        <select id="custFilterStaff" style="min-width:125px;">
           <option value="">Tất cả nhân viên</option>
           <option value="hai_em">Hải Em</option>
           <option value="ngoc_thuong">Ngọc Thương</option>
@@ -117,19 +124,17 @@ const bodyMarkup = `
           <option value="tan_phat">Tấn Phát</option>
           <option value="none">Chưa phân công</option>
         </select>
-      </div>
-      <div class="toolbar">
-        <select id="custFilterPayment">
+        <select id="custFilterPayment" style="min-width:125px;">
           <option value="">Tất cả trạng thái</option>
           <option value="da_tra">✅ Đã thu</option>
           <option value="chua_tra">🕒 Công nợ</option>
         </select>
-        <select id="custFilterPacked">
+        <select id="custFilterPacked" style="min-width:125px;">
           <option value="">Đóng hàng: tất cả</option>
           <option value="da">📦 Đã đóng hàng</option>
           <option value="chua">🧺 Chưa đóng hàng</option>
         </select>
-        <select id="custFilterDelivered">
+        <select id="custFilterDelivered" style="min-width:125px;">
           <option value="">Giao hàng: tất cả</option>
           <option value="da">🚚 Đã giao hàng</option>
           <option value="chua">🕓 Chưa giao hàng</option>
@@ -141,11 +146,21 @@ const bodyMarkup = `
   </div>
 
   <div class="view" id="view-orders">
+  <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <h2 style="margin:0;">Danh sách đơn hàng</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-secondary export-btn" id="exportOrdersJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
+    </div>
+  </div>
   <div class="card" style="margin-bottom:16px;">
     <div class="cf-stats" style="display:flex;gap:16px;flex-wrap:wrap;">
       <div class="cf-stat" style="flex:1;min-width:180px;">
         <div class="cf-lbl">Tổng đơn hôm nay</div>
         <div class="cf-num" id="orderTodayCount">0 đơn</div>
+      </div>
+      <div class="cf-stat" style="flex:1;min-width:180px;">
+        <div class="cf-lbl">Tổng tiền hôm nay</div>
+        <div class="cf-num" id="orderTodayValue">0đ</div>
       </div>
       <div class="cf-stat" style="flex:1;min-width:180px;">
         <div class="cf-lbl">Tổng đơn theo bộ lọc</div>
@@ -185,18 +200,21 @@ const bodyMarkup = `
   <div class="view" id="view-cskh">
   <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
     <h2 style="margin:0;">Chăm sóc khách hàng — chưa phát sinh đơn</h2>
-    <button class="btn" id="openAddCskhBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khách hàng CSKH</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-secondary export-btn" id="exportCskhJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
+      <button class="btn" id="openAddCskhBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khách hàng CSKH</button>
+    </div>
   </div>
   <div class="card">
       <div class="toolbar">
-        <input id="cskhSearch" placeholder="Tìm theo tên hoặc SĐT...">
-        <select id="cskhFilterType">
+        <input id="cskhSearch" placeholder="🔍 Tìm theo tên hoặc SĐT..." style="min-width:200px;">
+        <select id="cskhFilterType" style="min-width:125px;">
           <option value="">Tất cả phân loại</option>
           <option value="moi">Khách mới</option>
           <option value="cu">Khách cũ</option>
           <option value="tiemnang">Khách tiềm năng</option>
         </select>
-        <select id="cskhFilterStaff">
+        <select id="cskhFilterStaff" style="min-width:125px;">
           <option value="">Tất cả nhân viên</option>
           <option value="hai_em">Hải Em</option>
           <option value="ngoc_thuong">Ngọc Thương</option>
@@ -204,19 +222,17 @@ const bodyMarkup = `
           <option value="tan_phat">Tấn Phát</option>
           <option value="none">Chưa phân công</option>
         </select>
-      </div>
-      <div class="toolbar">
-        <select id="cskhFilterPayment">
+        <select id="cskhFilterPayment" style="min-width:125px;">
           <option value="">Tất cả trạng thái</option>
           <option value="da_tra">✅ Đã thu</option>
           <option value="chua_tra">🕒 Công nợ</option>
         </select>
-        <select id="cskhFilterPacked">
+        <select id="cskhFilterPacked" style="min-width:125px;">
           <option value="">Đóng hàng: tất cả</option>
           <option value="da">📦 Đã đóng hàng</option>
           <option value="chua">🧺 Chưa đóng hàng</option>
         </select>
-        <select id="cskhFilterDelivered">
+        <select id="cskhFilterDelivered" style="min-width:125px;">
           <option value="">Giao hàng: tất cả</option>
           <option value="da">🚚 Đã giao hàng</option>
           <option value="chua">🕓 Chưa giao hàng</option>
@@ -227,114 +243,163 @@ const bodyMarkup = `
   </div>
   </div>
 
+
+
   <div class="modal-overlay" id="customerModalOverlay">
-    <div class="modal-box">
+    <div class="modal-box modal-box-large">
       <div class="modal-header">
-        <h2 id="custFormTitle" style="margin:0;">👤 Thêm khách hàng</h2>
+        <div>
+          <h2 id="custFormTitle" style="margin:0;">👤 Thêm khách hàng</h2>
+          <div class="modal-subtitle">Điền thông tin khách hàng và thông tin đơn hàng</div>
+        </div>
         <button class="modal-close" id="closeCustomerModal" type="button">✕</button>
       </div>
-      <label for="cName">Tên khách hàng</label>
-      <input id="cName" placeholder="VD: Quán cơm Cô Tư">
-      <label for="cPhone">Số điện thoại</label>
-      <input id="cPhone" placeholder="090xxxxxxx">
-      <label for="cAddress">Địa chỉ</label>
-      <input id="cAddress" placeholder="VD: 12 Lê Lợi, Q1, TP.HCM">
-      <label for="cType">Phân loại</label>
-      <select id="cType">
-        <option value="moi">Khách mới</option>
-        <option value="cu">Khách cũ</option>
-        <option value="tiemnang">Khách tiềm năng</option>
-      </select>
 
-      <label for="cStage">Trạng thái</label>
-      <select id="cStage">
-        <option value="cskh">🤝 Đang chăm sóc (chưa phát sinh đơn)</option>
-        <option value="order">✅ Đã phát sinh đơn (Khách hàng)</option>
-      </select>
+      <div class="modal-body-grid">
+        <!-- CỘT 1: THÔNG TIN KHÁCH HÀNG & PHÂN CÔNG -->
+        <div class="modal-col">
+          <div class="form-section-title">📌 Thông tin cá nhân & Phân loại</div>
 
-      <div class="field-row">
-        <div>
-          <label for="cAcquiredDate">Ngày tiếp nhận khách hàng</label>
-          <input id="cAcquiredDate" type="date">
+          <label for="cName">Tên khách hàng <span class="req">*</span></label>
+          <input id="cName" placeholder="VD: Quán cơm Cô Tư">
+
+          <div class="field-row">
+            <div>
+              <label for="cPhone">Số điện thoại</label>
+              <input id="cPhone" placeholder="090xxxxxxx">
+            </div>
+            <div>
+              <label for="cStaff">Nhân viên phụ trách</label>
+              <select id="cStaff">
+                <option value="">— Chưa phân công —</option>
+                <option value="hai_em">Hải Em</option>
+                <option value="ngoc_thuong">Ngọc Thương</option>
+                <option value="ai_thi">Ái Thi</option>
+                <option value="tan_phat">Tấn Phát</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="cAddress">Địa chỉ giao hàng</label>
+          <input id="cAddress" placeholder="VD: 12 Lê Lợi, Q1, TP.HCM">
+
+          <div class="field-row">
+            <div>
+              <label for="cType">Phân loại khách</label>
+              <select id="cType">
+                <option value="moi">Khách mới</option>
+                <option value="cu">Khách cũ</option>
+                <option value="tiemnang">Khách tiềm năng</option>
+              </select>
+            </div>
+            <div>
+              <label for="cStage">Giai đoạn</label>
+              <select id="cStage">
+                <option value="cskh">🤝 Đang chăm sóc</option>
+                <option value="order">✅ Đã phát sinh đơn</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="cNote">Ghi chú về khách hàng</label>
+          <textarea id="cNote" rows="3" placeholder="VD: Thích gạo dẻo thơm, hay đặt vào cuối tuần..."></textarea>
         </div>
-        <div>
-          <label for="cLastOrderDate">Ngày đặt đơn gần nhất</label>
-          <input id="cLastOrderDate" type="date">
+
+        <!-- CỘT 2: MỐC THỜI GIAN & ĐƠN HÀNG -->
+        <div class="modal-col">
+          <div class="form-section-title">📅 Các mốc thời gian</div>
+          <div class="field-row">
+            <div>
+              <label for="cAcquiredDate">Ngày tiếp nhận</label>
+              <input id="cAcquiredDate" type="date">
+            </div>
+            <div>
+              <label for="cLastOrderDate">Ngày đặt đơn</label>
+              <input id="cLastOrderDate" type="date">
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="cDeliveryDate">Ngày giao hàng</label>
+              <input id="cDeliveryDate" type="date">
+            </div>
+            <div>
+              <label for="cNextContactDate">Ngày liên hệ lại</label>
+              <input id="cNextContactDate" type="date">
+            </div>
+          </div>
+
+          <div class="form-section-box">
+            <div class="form-section-title" style="margin-top:0;">🧾 Thông tin đơn hàng (nếu có)</div>
+
+            <label for="cProduct">Sản phẩm mua (tự trừ kho)</label>
+            <select id="cProduct">
+              <option value="">— Không trừ kho —</option>
+            </select>
+
+            <div class="field-row">
+              <div>
+                <label for="cKg">Số lượng (kg)</label>
+                <select id="cKg">
+                  <option value="5">5 kg</option>
+                  <option value="10">10 kg</option>
+                  <option value="15">15 kg</option>
+                  <option value="20">20 kg</option>
+                  <option value="25" selected>25 kg</option>
+                  <option value="30">30 kg</option>
+                  <option value="40">40 kg</option>
+                  <option value="50">50 kg</option>
+                  <option value="100">100 kg</option>
+                  <option value="custom">Khác...</option>
+                </select>
+                <input id="cKgCustom" type="number" min="0" step="1" placeholder="Nhập số kg" style="display:none;margin-top:6px;">
+              </div>
+              <div>
+                <label for="cPrice">Giá tiền</label>
+                <div class="money-input">
+                  <input id="cPrice" type="number" min="0" step="1" placeholder="450">
+                  <span class="money-suffix">.000 đ</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div>
+                <label for="cPaymentStatus">Thanh toán</label>
+                <select id="cPaymentStatus">
+                  <option value="da_tra">✅ Đã thu (trả liền)</option>
+                  <option value="chua_tra">🕒 Công nợ</option>
+                </select>
+              </div>
+              <div>
+                <label for="cCombo">Combo ưu đãi</label>
+                <select id="cCombo">
+                  <option value="">Không mua combo</option>
+                </select>
+              </div>
+            </div>
+            <div class="contact-line" id="cComboHint" style="display:none;font-size:12px;color:var(--accent-dark);margin-top:6px;font-weight:600;"></div>
+          </div>
         </div>
       </div>
-      <div class="field-row">
-        <div>
-          <label for="cDeliveryDate">Ngày giao hàng dự kiến</label>
-          <input id="cDeliveryDate" type="date">
-        </div>
-        <div>
-          <label for="cNextContactDate">Ngày cần liên hệ lại</label>
-          <input id="cNextContactDate" type="date">
-        </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelEditBtn" type="button">Hủy</button>
+        <button class="btn" id="addCustomerBtn" type="button">Lưu khách hàng</button>
       </div>
-
-      <label for="cStaff">Nhân viên phụ trách</label>
-      <select id="cStaff">
-        <option value="">— Chưa phân công —</option>
-        <option value="hai_em">Hải Em</option>
-        <option value="ngoc_thuong">Ngọc Thương</option>
-        <option value="ai_thi">Ái Thi</option>
-        <option value="tan_phat">Tấn Phát</option>
-      </select>
-      <label for="cNote">Ghi chú</label>
-      <textarea id="cNote" placeholder="VD: thích gạo dẻo, hay đặt cuối tuần..."></textarea>
-
-      <label for="cProduct">Sản phẩm mua (để tự trừ kho)</label>
-      <select id="cProduct">
-        <option value="">— Không trừ kho —</option>
-      </select>
-
-      <label for="cKg">Số kg đã mua</label>
-      <select id="cKg">
-        <option value="5">5 kg</option>
-        <option value="10">10 kg</option>
-        <option value="15">15 kg</option>
-        <option value="20">20 kg</option>
-        <option value="25" selected>25 kg</option>
-        <option value="30">30 kg</option>
-        <option value="40">40 kg</option>
-        <option value="50">50 kg</option>
-        <option value="100">100 kg</option>
-        <option value="custom">Khác...</option>
-      </select>
-      <input id="cKgCustom" type="number" min="0" step="1" placeholder="Nhập số kg" style="display:none;margin-top:8px;">
-
-      <label for="cPrice">Giá tiền</label>
-      <div class="money-input">
-        <input id="cPrice" type="number" min="0" step="1" placeholder="450">
-        <span class="money-suffix">.000 đ</span>
-      </div>
-
-      <label for="cPaymentStatus">Tình trạng thanh toán</label>
-      <select id="cPaymentStatus">
-        <option value="da_tra">✅ Đã thanh toán (trả liền)</option>
-        <option value="chua_tra">🕒 Chưa thanh toán (công nợ)</option>
-      </select>
-
-      <label for="cCombo">Mua combo ưu đãi?</label>
-      <select id="cCombo">
-        <option value="">Không mua combo</option>
-      </select>
-      <div class="contact-line" id="cComboHint" style="display:none;font-size:12.5px;color:var(--accent-dark);margin-top:6px;"></div>
-
-      <button class="btn" id="addCustomerBtn">Lưu khách hàng</button>
-      <button class="btn btn-secondary" id="cancelEditBtn">Hủy</button>
     </div>
   </div>
 
   <div class="modal-overlay" id="transferModalOverlay">
-    <div class="modal-box" style="max-width:380px;">
+    <div class="modal-box" style="max-width:440px;">
       <div class="modal-header">
-        <h2 style="margin:0;">🔄 Chuyển giao khách hàng</h2>
+        <div>
+          <h2 style="margin:0;">🔄 Chuyển giao khách hàng</h2>
+          <div class="modal-subtitle" id="transferCustName"></div>
+        </div>
         <button class="modal-close" id="closeTransferModal" type="button">✕</button>
       </div>
-      <div class="sub" id="transferCustName" style="margin-bottom:10px;"></div>
-      <label for="transferStaff">Chuyển cho nhân viên</label>
+      <label for="transferStaff" style="margin-top:14px;">Chọn nhân viên nhận phụ trách</label>
       <select id="transferStaff">
         <option value="">— Chưa phân công —</option>
         <option value="hai_em">Hải Em</option>
@@ -342,8 +407,10 @@ const bodyMarkup = `
         <option value="ai_thi">Ái Thi</option>
         <option value="tan_phat">Tấn Phát</option>
       </select>
-      <button class="btn" id="confirmTransferBtn">Xác nhận chuyển giao</button>
-      <button class="btn btn-secondary" id="cancelTransferBtn">Hủy</button>
+      <div class="modal-footer" style="margin-top:20px;">
+        <button class="btn btn-secondary" id="cancelTransferBtn" type="button">Hủy</button>
+        <button class="btn" id="confirmTransferBtn" type="button">Xác nhận chuyển</button>
+      </div>
     </div>
   </div>
 
@@ -363,7 +430,10 @@ const bodyMarkup = `
   <div class="card">
     <div class="card-header-row">
       <h2 style="margin:0;">Danh sách combo</h2>
-      <button class="btn" id="openAddComboBtn" style="margin:0;width:auto;padding:10px 20px;">+ Tạo combo</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary export-btn" id="exportCombosJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
+          <button class="btn" id="openAddComboBtn" style="margin:0;width:auto;padding:10px 20px;">+ Tạo combo</button>
+        </div>
     </div>
     <div class="count" id="comboCount"></div>
     <div id="comboTableHolder"></div>
@@ -371,61 +441,98 @@ const bodyMarkup = `
   </div>
 
   <div class="modal-overlay" id="comboModalOverlay">
-    <div class="modal-box">
+    <div class="modal-box modal-box-large">
       <div class="modal-header">
-        <h2 id="comboFormTitle" style="margin:0;">🎁 Tạo combo ưu đãi</h2>
+        <div>
+          <h2 id="comboFormTitle" style="margin:0;">🎁 Tạo combo ưu đãi</h2>
+          <div class="modal-subtitle">Thiết lập chương trình combo khuyến mãi, giảm giá và tặng kèm</div>
+        </div>
         <button class="modal-close" id="closeComboModal" type="button">✕</button>
       </div>
-      <label for="koName">Tên combo</label>
-      <input id="koName" placeholder="VD: Combo Gia Đình 25kg">
-      <label for="koDesc">Mô tả</label>
-      <textarea id="koDesc" placeholder="VD: 1 bao ST25 25kg + 1 chai nước mắm truyền thống"></textarea>
 
-      <label for="koProduct">Sản phẩm đi kèm</label>
-      <select id="koProduct">
-        <option value="">— Chọn sản phẩm trong kho —</option>
-      </select>
+      <div class="modal-body-grid">
+        <!-- CỘT 1: THÔNG TIN SẢN PHẨM & COMBO -->
+        <div class="modal-col">
+          <div class="form-section-title">📌 Thông tin cơ bản Combo</div>
 
-      <label for="koBaseKg">Số lượng gốc</label>
-      <input id="koBaseKg" type="number" min="0" step="0.1" placeholder="25">
+          <label for="koName">Tên combo <span class="req">*</span></label>
+          <input id="koName" placeholder="VD: Combo Gia Đình 25kg">
 
-      <label for="koUnitPrice">Đơn giá / đơn vị</label>
-      <div class="money-input">
-        <input id="koUnitPrice" type="number" min="0" step="1" placeholder="25">
-        <span class="money-suffix" id="koUnitPriceSuffix">.000 đ/kg</span>
+          <label for="koDesc">Mô tả chi tiết</label>
+          <textarea id="koDesc" rows="3" placeholder="VD: 1 bao ST25 25kg + 1 chai nước mắm truyền thống Phú Quốc"></textarea>
+
+          <label for="koProduct">Sản phẩm đi kèm (trong kho) <span class="req">*</span></label>
+          <select id="koProduct">
+            <option value="">— Chọn sản phẩm trong kho —</option>
+          </select>
+
+          <div class="field-row">
+            <div>
+              <label for="koBaseKg">Số lượng gốc</label>
+              <input id="koBaseKg" type="number" min="0" step="0.1" placeholder="25">
+            </div>
+            <div>
+              <label for="koUnitPrice">Đơn giá / đơn vị</label>
+              <div class="money-input">
+                <input id="koUnitPrice" type="number" min="0" step="1" placeholder="25">
+                <span class="money-suffix" id="koUnitPriceSuffix">.000 đ/kg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CỘT 2: CHÍNH SÁCH ƯU ĐÃI & XEM TRƯỚC GIÁ -->
+        <div class="modal-col">
+          <div class="form-section-title">⭐ Chính sách ưu đãi & Quà tặng</div>
+
+          <label>Loại ưu đãi áp dụng</label>
+          <div class="toolbar" id="koOfferTypeBtns">
+            <button type="button" class="btn btn-secondary" data-offer="percent" id="koOfferPercentBtn">🔻 Giảm %</button>
+            <button type="button" class="btn btn-secondary" data-offer="kg" id="koOfferKgBtn">🎁 Tặng thêm</button>
+            <button type="button" class="btn btn-secondary" data-offer="money" id="koOfferMoneyBtn">💵 Trừ tiền</button>
+          </div>
+          <input type="hidden" id="koOfferType" value="percent">
+
+          <label for="koOfferValue" id="koOfferValueLbl">Giá trị ưu đãi (%)</label>
+          <div class="money-input" id="koOfferValueWrap">
+            <input id="koOfferValue" type="number" min="0" step="0.1" placeholder="10">
+            <span class="money-suffix" id="koOfferValueSuffix">%</span>
+          </div>
+
+          <label for="koGiftProduct">Quà tặng kèm (không tính giá, tùy chọn)</label>
+          <select id="koGiftProduct">
+            <option value="">— Không có quà tặng kèm —</option>
+          </select>
+
+          <div id="koGiftQtyWrap" style="display:none;margin-top:8px;">
+            <label for="koGiftQty">Số lượng quà tặng</label>
+            <input id="koGiftQty" type="number" min="0" step="0.1" placeholder="1">
+          </div>
+
+          <!-- BẢNG XEM TRƯỚC TÍNH TOÁN GIÁ -->
+          <div class="combo-preview-card">
+            <div class="combo-preview-title">📊 Xem trước kết quả tính toán</div>
+            <div class="combo-preview-row">
+              <span>Giá gốc ban đầu:</span>
+              <strong id="koCalcBase">0 đ</strong>
+            </div>
+            <div class="combo-preview-row">
+              <span>Tổng khối lượng khách nhận:</span>
+              <strong id="koCalcKg">0 kg</strong>
+            </div>
+            <div class="combo-preview-divider"></div>
+            <div class="combo-preview-row final-row">
+              <span>Giá thanh toán cuối cùng:</span>
+              <strong id="koCalcFinal">0 đ</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <label>Loại ưu đãi</label>
-      <div class="toolbar" id="koOfferTypeBtns" style="margin-bottom:0;">
-        <button type="button" class="btn btn-secondary" data-offer="percent" id="koOfferPercentBtn" style="margin-top:0;">🔻 Giảm %</button>
-        <button type="button" class="btn btn-secondary" data-offer="kg" id="koOfferKgBtn" style="margin-top:0;">🎁 Tặng thêm</button>
-        <button type="button" class="btn btn-secondary" data-offer="money" id="koOfferMoneyBtn" style="margin-top:0;">💵 Trừ tiền</button>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelComboEditBtn" type="button">Hủy</button>
+        <button class="btn" id="addComboBtn" type="button">Lưu combo</button>
       </div>
-      <input type="hidden" id="koOfferType" value="percent">
-
-      <label for="koOfferValue" id="koOfferValueLbl">Giá trị ưu đãi (%)</label>
-      <div class="money-input" id="koOfferValueWrap">
-        <input id="koOfferValue" type="number" min="0" step="0.1" placeholder="10">
-        <span class="money-suffix" id="koOfferValueSuffix">%</span>
-      </div>
-
-      <label for="koGiftProduct">Sản phẩm tặng kèm (không tính giá, tùy chọn)</label>
-      <select id="koGiftProduct">
-        <option value="">— Không có quà tặng kèm —</option>
-      </select>
-      <div id="koGiftQtyWrap" style="display:none;">
-        <label for="koGiftQty">Số lượng tặng kèm</label>
-        <input id="koGiftQty" type="number" min="0" step="0.1" placeholder="1">
-      </div>
-
-      <div class="card" style="background:var(--rice);margin-top:14px;padding:12px 14px;">
-        <div class="contact-line" style="font-size:12.5px;">Giá gốc: <b id="koCalcBase">0 đ</b></div>
-        <div class="contact-line" style="font-size:12.5px;">Tổng kg khách nhận: <b id="koCalcKg">0 kg</b></div>
-        <div class="contact-line" style="font-size:13.5px;color:var(--accent-dark);">Giá cuối khách trả: <b id="koCalcFinal">0 đ</b></div>
-      </div>
-
-      <button class="btn" id="addComboBtn">Lưu combo</button>
-      <button class="btn btn-secondary" id="cancelComboEditBtn" style="display:none;">Hủy sửa</button>
     </div>
   </div>
 
@@ -452,7 +559,10 @@ const bodyMarkup = `
     <div class="card" style="margin-bottom:16px;">
       <div class="card-header-row">
         <h2 style="margin:0;">Danh sách sản phẩm &amp; tồn kho</h2>
-        <button class="btn" id="openAddProductBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm sản phẩm</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary export-btn" id="exportProductsJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
+          <button class="btn" id="openAddProductBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm sản phẩm</button>
+        </div>
       </div>
       <div class="count" id="productCount"></div>
       <div id="productTableHolder"></div>
@@ -522,36 +632,47 @@ const bodyMarkup = `
   </div>
 
   <div class="modal-overlay" id="stockModalOverlay">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:540px;">
       <div class="modal-header">
-        <h2 id="whEntryFormTitle" style="margin:0;">📥 Nhập / xuất kho</h2>
+        <div>
+          <h2 id="whEntryFormTitle" style="margin:0;">📥 Nhập / xuất kho</h2>
+          <div class="modal-subtitle">Ghi nhận phiếu nhập hàng hoặc xuất kho điều chuyển</div>
+        </div>
         <button class="modal-close" id="closeStockModal" type="button">✕</button>
       </div>
-      <label>Loại phiếu</label>
+      <label>Loại phiếu kho</label>
       <div class="cf-type-toggle">
-        <button type="button" class="cf-type-btn active" id="whTypeNhapBtn" data-type="nhap">Nhập kho</button>
-        <button type="button" class="cf-type-btn" id="whTypeXuatBtn" data-type="xuat">Xuất kho</button>
+        <button type="button" class="cf-type-btn active" id="whTypeNhapBtn" data-type="nhap">📥 Nhập kho</button>
+        <button type="button" class="cf-type-btn" id="whTypeXuatBtn" data-type="xuat">📤 Xuất kho</button>
       </div>
       <input type="hidden" id="whType" value="nhap">
-      <label for="whProduct">Sản phẩm</label>
+      <label for="whProduct">Sản phẩm <span class="req">*</span></label>
       <select id="whProduct"></select>
-      <label for="whQty">Số lượng</label>
-      <input id="whQty" type="number" min="0" step="1" placeholder="VD: 100">
-      <label for="whPrice" id="whPriceLabel">Tổng giá trị nhập</label>
-      <div class="money-input">
-        <input id="whPrice" type="number" min="0" step="1" placeholder="18">
-        <span class="money-suffix">.000 đ</span>
+      <div class="field-row">
+        <div>
+          <label for="whQty">Số lượng</label>
+          <input id="whQty" type="number" min="0" step="1" placeholder="VD: 100">
+        </div>
+        <div>
+          <label for="whPrice" id="whPriceLabel">Tổng giá trị</label>
+          <div class="money-input">
+            <input id="whPrice" type="number" min="0" step="1" placeholder="18">
+            <span class="money-suffix">.000 đ</span>
+          </div>
+        </div>
       </div>
       <div id="whSupplierWrap">
-        <label for="whSupplier">Nhà cung cấp</label>
+        <label for="whSupplier">Nhà cung cấp / Đối tác</label>
         <input id="whSupplier" placeholder="VD: Đại lý gạo Tân Phát">
       </div>
-      <label for="whDate">Ngày</label>
+      <label for="whDate">Ngày phát sinh phiếu</label>
       <input id="whDate" type="date">
       <label for="whNote">Ghi chú</label>
-      <textarea id="whNote" placeholder="Ghi chú thêm (không bắt buộc)..."></textarea>
-      <button class="btn" id="addStockEntryBtn">Lưu phiếu</button>
-      <button class="btn btn-secondary" id="cancelStockEditBtn">Hủy</button>
+      <textarea id="whNote" rows="2" placeholder="Ghi chú thêm (không bắt buộc)..."></textarea>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelStockEditBtn" type="button">Hủy</button>
+        <button class="btn" id="addStockEntryBtn" type="button">Lưu phiếu kho</button>
+      </div>
     </div>
   </div>
 
@@ -589,28 +710,23 @@ const bodyMarkup = `
           <button class="btn" id="openAddExpenseBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khoản chi phí / vốn</button>
         </div>
       </div>
-      <div class="toolbar">
-        <input id="cfSearch" placeholder="Tìm theo tên khách hàng / khoản mục...">
-        <select id="cfFilterKind">
+      <div class="toolbar" style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <input id="cfSearch" placeholder="🔍 Tìm theo tên khách hàng / khoản mục..." style="flex:2;min-width:260px;">
+        <select id="cfFilterKind" style="flex:1;min-width:160px;">
           <option value="">Tất cả loại</option>
-          <option value="revenue">Đã thu</option>
-          <option value="debt">Công nợ</option>
-          <option value="chi_phi">Chi phí bán hàng</option>
-          <option value="von">Vốn</option>
-          <option value="hoan_von">Hoàn vốn</option>
+          <option value="revenue">✅ Đã thu</option>
+          <option value="debt">🕒 Công nợ</option>
+          <option value="chi_phi">💸 Chi phí bán hàng</option>
+          <option value="von">💼 Vốn</option>
+          <option value="hoan_von">🔄 Hoàn vốn</option>
         </select>
-      </div>
-      <div class="field-row" style="margin-bottom:6px;">
-        <div>
-          <label for="cfFilterFrom">Từ ngày</label>
-          <input id="cfFilterFrom" type="date">
-        </div>
-        <div>
-          <label for="cfFilterTo">Đến ngày</label>
-          <input id="cfFilterTo" type="date">
+        <div style="display:flex;gap:6px;align-items:center;flex:1.5;min-width:280px;">
+          <input id="cfFilterFrom" type="date" title="Từ ngày" style="flex:1;">
+          <span style="color:#64748b;font-weight:700;">→</span>
+          <input id="cfFilterTo" type="date" title="Đến ngày" style="flex:1;">
         </div>
       </div>
-      <div class="count" id="cfCount"></div>
+      <div class="count" id="cfCount" style="margin-bottom:12px;font-size:13px;font-weight:700;color:#475569;"></div>
       <div id="cashflowTableHolder"></div>
     </div>
   </div>
@@ -656,12 +772,15 @@ const bodyMarkup = `
   </div>
 
   <div class="modal-overlay" id="accountModalOverlay">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:480px;">
       <div class="modal-header">
-        <h2 id="accountFormTitle" style="margin:0;">🔑 Thêm tài khoản</h2>
+        <div>
+          <h2 id="accountFormTitle" style="margin:0;">🔑 Thêm tài khoản</h2>
+          <div class="modal-subtitle">Lưu trữ tài khoản quản trị mạng xã hội, email, sàn TMĐT</div>
+        </div>
         <button class="modal-close" id="closeAccountModal" type="button">✕</button>
       </div>
-      <label for="acName">Tên tài nguyên</label>
+      <label for="acName">Nền tảng / Tài nguyên</label>
       <select id="acName">
         <option value="EMAIL">EMAIL</option>
         <option value="FACEBOOK">FACEBOOK</option>
@@ -673,12 +792,46 @@ const bodyMarkup = `
         <option value="KHAC">Khác...</option>
       </select>
       <input id="acNameCustom" placeholder="Nhập tên tài nguyên" style="display:none;margin-top:8px;">
-      <label for="acUser">Tên đăng nhập</label>
-      <input id="acUser" placeholder="VD: vigenfood26@gmail.com">
-      <label for="acPass">Mật khẩu</label>
-      <input id="acPass" placeholder="VD: Vigenfood@2026">
-      <button class="btn" id="addAccountBtn">Lưu tài khoản</button>
-      <button class="btn btn-secondary" id="cancelAccountEditBtn" style="display:none;">Hủy sửa</button>
+      <div class="field-row">
+        <div>
+          <label for="acUser">Tên đăng nhập / Email</label>
+          <input id="acUser" placeholder="VD: vigenfood26@gmail.com">
+        </div>
+        <div>
+          <label for="acPass">Mật khẩu</label>
+          <input id="acPass" placeholder="VD: Vigenfood@2026">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelAccountEditBtn" type="button">Hủy</button>
+        <button class="btn" id="addAccountBtn" type="button">Lưu tài khoản</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL XEM & IN HÓA ĐƠN BÁN HÀNG (PDF) -->
+  <div class="modal-overlay" id="invoiceModalOverlay">
+    <div class="modal-box modal-box-large invoice-modal-box">
+      <div class="modal-header no-print">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <h2 id="invoiceModalTitle" style="margin:0;">🧾 Hóa đơn bán hàng</h2>
+          <span class="tag tag-revenue" style="font-size:11.5px;">Vị Nguyên Food</span>
+        </div>
+        <button class="modal-close" id="closeInvoiceModal" type="button">✕</button>
+      </div>
+
+      <div id="invoiceContentArea" style="background:#ffffff;padding:8px 4px;max-height:70vh;overflow-y:auto;"></div>
+
+      <div class="modal-footer no-print" style="margin-top:14px;">
+        <button class="btn btn-secondary" id="closeInvoiceBtn" type="button">Đóng</button>
+        <button class="btn btn-secondary" id="exportPdfBtnBottom" type="button" style="margin:0;width:auto;display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;border:1.5px solid #2563eb;color:#2563eb;background:#eff6ff;">
+          📥 Xuất file PDF (Không chữ ký)
+        </button>
+        <button class="btn" id="printInvoiceBtnBottom" type="button" style="margin:0;width:auto;display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;background:#2563eb;">
+          🖨️ In hóa đơn (Có chữ ký)
+        </button>
+      </div>
     </div>
   </div>
 

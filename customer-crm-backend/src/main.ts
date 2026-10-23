@@ -30,7 +30,8 @@ async function bootstrap() {
   );
 
   // ---- CORS: cho phép frontend (Next.js chạy ở domain/port khác) gọi API này ----
-  const corsOrigin = config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000';
+  const corsOrigin =
+    config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000';
   app.enableCors({
     origin: corsOrigin.split(',').map((s) => s.trim()), // hỗ trợ nhiều domain, cách nhau dấu phẩy trong .env
     credentials: true,
@@ -39,7 +40,10 @@ async function bootstrap() {
   const port = config.get<number>('PORT') ?? 3001;
   await app.listen(port, '0.0.0.0');
 
-  Logger.log(`🚀 Server đang chạy tại: http://0.0.0.0:${port}/api`, 'Bootstrap');
+  Logger.log(
+    `🚀 Server đang chạy tại: http://0.0.0.0:${port}/api`,
+    'Bootstrap',
+  );
 }
 
 // Gọi hàm bootstrap() để khởi động app. void ở đầu để báo hiệu rõ ràng ta

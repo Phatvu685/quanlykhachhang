@@ -1,5 +1,13 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import { SocialAccountsService } from './social-accounts.service';
 import { CreateSocialAccountDto } from './dto/create-social-account.dto';
@@ -30,7 +38,10 @@ export class SocialAccountsController {
   }
 
   @Patch(':id')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateSocialAccountDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSocialAccountDto,
+  ) {
     return this.service.update(id, dto);
   }
 

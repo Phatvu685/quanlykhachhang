@@ -3,12 +3,23 @@
 // và 1 route GET /auth/me để frontend tự kiểm tra token còn hiệu lực không
 // + lấy lại thông tin user (dùng khi F5 lại trang, giữ trạng thái đăng nhập).
 // ============================================================================
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentUser, type AuthUser } from '../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type AuthUser,
+} from '../common/decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -30,7 +41,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard) // route này BẮT BUỘC phải có token hợp lệ mới gọi được
-  async me(@CurrentUser() user: AuthUser) {
+  me(@CurrentUser() user: AuthUser) {
     return user; // trả lại chính payload đã giải mã từ token (id, username, role)
   }
 }

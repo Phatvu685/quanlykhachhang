@@ -26,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   // validate() được Passport tự gọi SAU KHI verify chữ ký + hạn token thành công.
   // Giá trị "payload" chính là object đã đưa vào lúc ký token (AuthService.login).
   // Giá trị return của hàm này sẽ được gán vào "request.user".
-  async validate(payload: AuthUser): Promise<AuthUser> {
+  validate(payload: AuthUser): AuthUser {
     return {
       userId: payload.userId,
       username: payload.username,

@@ -71,7 +71,8 @@ export class UsersService {
     const data: { username?: string; role?: any; passwordHash?: string } = {};
     if (dto.username) data.username = dto.username;
     if (dto.role) data.role = dto.role;
-    if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    if (dto.password)
+      data.passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
 
     return this.prisma.user.update({
       where: { id },

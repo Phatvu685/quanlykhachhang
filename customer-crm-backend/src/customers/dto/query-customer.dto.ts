@@ -3,7 +3,11 @@
 // port lại từ bộ lọc trong renderCustomerList()/renderOrders() bản gốc.
 // ============================================================================
 import { IsIn, IsOptional, IsString } from 'class-validator';
-import type { CustomerStage, CustomerType, PaymentStatus } from '@prisma/client';
+import type {
+  CustomerStage,
+  CustomerType,
+  PaymentStatus,
+} from '@prisma/client';
 
 export class QueryCustomerDto {
   @IsOptional()
