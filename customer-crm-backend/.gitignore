@@ -1,9 +1,0 @@
-node_modules
-dist
-.env
-.env.local
-.env.docker
-nul
-npm-debug.log*
-coverage
-*.log

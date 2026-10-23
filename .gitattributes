@@ -1,2 +1,0 @@
-QuanLyKhachHang-Setup-1.0.0/Quan[[:space:]]Ly[[:space:]]Khach[[:space:]]Hang.exe filter=lfs diff=lfs merge=lfs -text
-*.sh text eol=lf
