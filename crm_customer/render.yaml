@@ -1,12 +1,16 @@
 services:
   - type: web
-    name: customer-crm-backend
-    runtime: docker
+    name: quanlykhachhang-api
+    runtime: node
+    region: singapore
     plan: free
-    dockerfilePath: ./customer-crm-backend/Dockerfile
-    dockerContext: ./customer-crm-backend
+    rootDir: customer-crm-backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma db push --skip-generate && node prisma/seed-runtime.js && npm run start:prod
     healthCheckPath: /api/health
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
@@ -18,20 +22,24 @@ services:
       - key: CORS_ORIGIN
         fromService:
           type: web
-          name: customer-crm-web
+          name: quanlykhachhang
           envVarKey: RENDER_EXTERNAL_URL
 
   - type: web
-    name: customer-crm-web
-    runtime: docker
+    name: quanlykhachhang
+    runtime: node
+    region: singapore
     plan: free
-    dockerfilePath: ./customer-crm-nextjs/Dockerfile
-    dockerContext: ./customer-crm-nextjs
+    rootDir: customer-crm-nextjs
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_BASE_URL
         fromService:
           type: web
-          name: customer-crm-backend
+          name: quanlykhachhang-api
           envVarKey: RENDER_EXTERNAL_URL
