@@ -706,6 +706,7 @@ const bodyMarkup = `
         <h2 style="margin:0;">Sổ dòng tiền (doanh thu khách hàng + chi phí + vốn)</h2>
         <div style="display:flex;gap:8px;">
           <button class="today-btn" id="cfTodayBtn" type="button">📅 Hôm nay</button>
+          <button class="export-btn" id="cfClearFilterBtn" type="button" title="Xóa bộ lọc ngày" style="display:none;">✕ Xóa lọc</button>
           <button class="export-btn" id="exportCfExcelBtn" type="button">📥 Xuất Excel</button>
           <button class="btn" id="openAddExpenseBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khoản chi phí / vốn</button>
         </div>
@@ -726,6 +727,35 @@ const bodyMarkup = `
           <input id="cfFilterTo" type="date" title="Đến ngày" style="flex:1;">
         </div>
       </div>
+
+      <!-- 3 ô tổng hợp dòng tiền khi lọc ngày tháng năm: Doanh thu, Chi phí, Vốn -->
+      <div class="cf-filtered-stats" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:12px;margin-bottom:14px;">
+        <div class="cf-stat cf-revenue" style="padding:12px 16px;background:#f8fafc;border-radius:10px;">
+          <div class="cf-lbl" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="color:#15803d;font-weight:700;font-size:12px;">💰 TỔNG DOANH THU (THEO LỌC)</span>
+            <span id="cfFilteredRevBadge" style="font-size:11px;font-weight:700;color:#15803d;background:#dcfce7;padding:2px 8px;border-radius:12px;">0 khoản</span>
+          </div>
+          <div class="cf-num" id="cfFilteredRevenue" style="font-size:22px;font-weight:800;color:#15803d;">0đ</div>
+          <div class="cf-sub" id="cfFilteredRevenueDetail" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+        </div>
+        <div class="cf-stat cf-expense" style="padding:12px 16px;background:#f8fafc;border-radius:10px;">
+          <div class="cf-lbl" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="color:#dc2626;font-weight:700;font-size:12px;">💸 TỔNG CHI PHÍ (THEO LỌC)</span>
+            <span id="cfFilteredExpBadge" style="font-size:11px;font-weight:700;color:#dc2626;background:#fee2e2;padding:2px 8px;border-radius:12px;">0 khoản</span>
+          </div>
+          <div class="cf-num" id="cfFilteredExpense" style="font-size:22px;font-weight:800;color:#dc2626;">0đ</div>
+          <div class="cf-sub" id="cfFilteredExpenseDetail" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+        </div>
+        <div class="cf-stat cf-capital" style="padding:12px 16px;background:#f8fafc;border-radius:10px;">
+          <div class="cf-lbl" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="color:#0284c7;font-weight:700;font-size:12px;">💼 TỔNG VỐN (THEO LỌC)</span>
+            <span id="cfFilteredCapBadge" style="font-size:11px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:2px 8px;border-radius:12px;">0 khoản</span>
+          </div>
+          <div class="cf-num" id="cfFilteredCapital" style="font-size:22px;font-weight:800;color:#0284c7;">0đ</div>
+          <div class="cf-sub" id="cfFilteredCapitalDetail" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+        </div>
+      </div>
+
       <div class="count" id="cfCount" style="margin-bottom:12px;font-size:13px;font-weight:700;color:#475569;"></div>
       <div id="cashflowTableHolder"></div>
     </div>

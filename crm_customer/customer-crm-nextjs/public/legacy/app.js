@@ -893,8 +893,89 @@ function renderCashflow(){
     return matchSearch && matchKind && matchFrom && matchTo;
   });
 
-  document.getElementById('cfCount').textContent =
-    `${filteredEntries.length} / ${allEntries.length} khoản mục (${revenueEntries.length} đã thu, ${debtEntries.length} công nợ, ${expenses.length} chi phí/vốn)`;
+  // Tính toán số liệu theo bộ lọc cho 2 ô: Tổng doanh thu và Tổng chi phí & vốn
+  const filteredRevEntries = filteredEntries.filter(e=>e.kind==='revenue');
+  const filteredRevTotal = filteredRevEntries.reduce((s,e)=>s+e.amount,0);
+
+  const filteredDebtEntries = filteredEntries.filter(e=>e.kind==='debt');
+  const filteredDebtTotal = filteredDebtEntries.reduce((s,e)=>s+e.amount,0);
+
+  const filteredExpEntries = filteredEntries.filter(e=>e.kind==='chi_phi');
+  const filteredCapEntries = filteredEntries.filter(e=>e.kind==='von');
+  const filteredRefEntries = filteredEntries.filter(e=>e.kind==='hoan_von');
+
+  const filteredExpTotal = filteredExpEntries.reduce((s,e)=>s+e.amount,0);
+  const filteredCapTotal = filteredCapEntries.reduce((s,e)=>s+e.amount,0);
+  const filteredRefTotal = filteredRefEntries.reduce((s,e)=>s+e.amount,0);
+  const filteredCostTotal = filteredExpTotal + filteredCapTotal - filteredRefTotal;
+
+  // Cập nhật 3 ô thống kê theo bộ lọc: Doanh thu, Chi phí, Vốn
+  const cfFilteredRevEl = document.getElementById('cfFilteredRevenue');
+  if(cfFilteredRevEl){
+    cfFilteredRevEl.textContent = formatVND(filteredRevTotal);
+    const revBadgeEl = document.getElementById('cfFilteredRevBadge');
+    if(revBadgeEl) revBadgeEl.textContent = `${filteredRevEntries.length} khoản đã thu`;
+    const revDetailEl = document.getElementById('cfFilteredRevenueDetail');
+    if(revDetailEl){
+      if(filteredDebtTotal > 0){
+        revDetailEl.textContent = `Đã thu: ${formatVND(filteredRevTotal)} · Công nợ: ${formatVND(filteredDebtTotal)} (${filteredDebtEntries.length} đơn)`;
+      } else {
+        revDetailEl.textContent = `Tổng doanh thu khách hàng đã thanh toán`;
+      }
+    }
+  }
+
+  const cfFilteredExpEl = document.getElementById('cfFilteredExpense');
+  if(cfFilteredExpEl){
+    cfFilteredExpEl.textContent = formatVND(filteredExpTotal);
+    const expBadgeEl = document.getElementById('cfFilteredExpBadge');
+    if(expBadgeEl) expBadgeEl.textContent = `${filteredExpEntries.length} khoản chi`;
+    const expDetailEl = document.getElementById('cfFilteredExpenseDetail');
+    if(expDetailEl){
+      expDetailEl.textContent = `Chi phí bán hàng trong kỳ lọc`;
+    }
+  }
+
+  const cfFilteredCapEl = document.getElementById('cfFilteredCapital');
+  if(cfFilteredCapEl){
+    const netCapital = filteredCapTotal - filteredRefTotal;
+    cfFilteredCapEl.textContent = (netCapital < 0 ? '-' : '') + formatVND(Math.abs(netCapital));
+    const capBadgeEl = document.getElementById('cfFilteredCapBadge');
+    const capCount = filteredCapEntries.length + filteredRefEntries.length;
+    if(capBadgeEl) capBadgeEl.textContent = `${capCount} khoản vốn`;
+    const capDetailEl = document.getElementById('cfFilteredCapitalDetail');
+    if(capDetailEl){
+      if(filteredRefTotal > 0){
+        capDetailEl.textContent = `Đã bỏ ra: ${formatVND(filteredCapTotal)} · Đã hoàn: ${formatVND(filteredRefTotal)}`;
+      } else {
+        capDetailEl.textContent = `Số vốn đã xuất ra trong kỳ lọc`;
+      }
+    }
+  }
+
+  const clearFilterBtn = document.getElementById('cfClearFilterBtn');
+  if(clearFilterBtn){
+    clearFilterBtn.style.display = (fromDate || toDate) ? 'inline-block' : 'none';
+  }
+
+  const netDiff = filteredRevTotal - filteredCostTotal;
+  const netDiffSign = netDiff >= 0 ? '+' : '-';
+  const netDiffColor = netDiff >= 0 ? '#15803d' : '#dc2626';
+
+  let dateNote = '';
+  if(fromDate && toDate && fromDate === toDate){
+    dateNote = ` (Ngày ${formatDateVN(fromDate)})`;
+  } else if(fromDate || toDate){
+    dateNote = ` (${fromDate ? 'Từ ' + formatDateVN(fromDate) : ''}${toDate ? ' đến ' + formatDateVN(toDate) : ''})`;
+  }
+
+  const cfCountEl = document.getElementById('cfCount');
+  if(cfCountEl){
+    cfCountEl.innerHTML = `
+      <span>${filteredEntries.length} / ${allEntries.length} khoản mục (${filteredRevEntries.length} đã thu${filteredDebtEntries.length ? `, ${filteredDebtEntries.length} công nợ` : ''}, ${filteredExpEntries.length} chi phí, ${filteredCapEntries.length + filteredRefEntries.length} vốn)${dateNote}</span>
+      <span style="margin-left:14px;color:${netDiffColor};font-weight:700;">Chênh lệch thu − (chi + vốn): ${netDiffSign}${formatVND(Math.abs(netDiff))}</span>
+    `;
+  }
 
   const holder = document.getElementById('cashflowTableHolder');
   if(filteredEntries.length === 0){
@@ -1443,6 +1524,24 @@ function exportCashflowExcel(){
     {'Chỉ tiêu':'Vốn Đang Treo (chưa hoàn)', 'Số tiền (đ)': capitalOutstanding},
     {'Chỉ tiêu':'Lời / Lỗ', 'Số tiền (đ)': profit},
   ];
+
+  if(fromDate || toDate || kindFilter || search){
+    const fRev = allEntries.filter(e=>e.kind==='Đã thu').reduce((s,e)=>s+e.amount,0);
+    const fExp = allEntries.filter(e=>e.kind==='Chi phí bán hàng').reduce((s,e)=>s+e.amount,0);
+    const fCap = allEntries.filter(e=>e.kind==='Vốn').reduce((s,e)=>s+e.amount,0);
+    const fRef = allEntries.filter(e=>e.kind==='Hoàn vốn').reduce((s,e)=>s+e.amount,0);
+    const fCost = fExp + fCap - fRef;
+    summaryRows.unshift(
+      {'Chỉ tiêu':'--- SỐ LIỆU THEO BỘ LỌC HIỆN TẠI ---', 'Số tiền (đ)': ''},
+      {'Chỉ tiêu':'Doanh thu theo bộ lọc', 'Số tiền (đ)': fRev},
+      {'Chỉ tiêu':'Chi phí & Vốn theo bộ lọc', 'Số tiền (đ)': fCost},
+      {'Chỉ tiêu':'  + Trong đó Chi phí', 'Số tiền (đ)': fExp},
+      {'Chỉ tiêu':'  + Trong đó Vốn', 'Số tiền (đ)': fCap},
+      {'Chỉ tiêu':'  + Trong đó Hoàn vốn', 'Số tiền (đ)': fRef},
+      {'Chỉ tiêu':'Chênh lệch thu - chi (theo lọc)', 'Số tiền (đ)': fRev - fCost},
+      {'Chỉ tiêu':'--- TOÀN BỘ SỔ DÒNG TIỀN (TOÀN THỜI GIAN) ---', 'Số tiền (đ)': ''}
+    );
+  }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Sổ dòng tiền');
@@ -2816,8 +2915,18 @@ document.getElementById('cfTodayBtn').addEventListener('click', ()=>{
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('cfFilterFrom').value = today;
   document.getElementById('cfFilterTo').value = today;
+  paginationState.cashflow = 1;
   renderCashflow();
 });
+const cfClearBtn = document.getElementById('cfClearFilterBtn');
+if(cfClearBtn){
+  cfClearBtn.addEventListener('click', ()=>{
+    document.getElementById('cfFilterFrom').value = '';
+    document.getElementById('cfFilterTo').value = '';
+    paginationState.cashflow = 1;
+    renderCashflow();
+  });
+}
 
 document.getElementById('acName').addEventListener('change', ()=>{
   document.getElementById('acNameCustom').style.display =

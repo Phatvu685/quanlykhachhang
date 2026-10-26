@@ -679,6 +679,9 @@ td .row-action[data-action="delete"]{
 .cf-stat.cf-profit .cf-num.positive{color:#059669;}
 .cf-stat.cf-profit .cf-num.negative{color:#dc2626;}
 .cf-stat.cf-profit{border-left:5px solid var(--accent);}
+.cf-filtered-stats{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px;margin-bottom:14px;}
+@media (max-width:960px){.cf-filtered-stats{grid-template-columns:repeat(2, 1fr);}}
+@media (max-width:640px){.cf-filtered-stats{grid-template-columns:1fr;}}
 
 .cf-type-toggle{display:flex;gap:8px;margin:10px 0 4px;}
 .cf-type-btn{

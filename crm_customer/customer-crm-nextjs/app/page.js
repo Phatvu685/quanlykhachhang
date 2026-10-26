@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Script from "next/script";
 import bodyMarkup from "./bodyMarkup";
 
-const APP_VERSION = "20261023_2001";
+const APP_VERSION = "20261026_1529";
 
 /**
  * This page renders the original CRM app markup/CSS verbatim, then loads scripts
