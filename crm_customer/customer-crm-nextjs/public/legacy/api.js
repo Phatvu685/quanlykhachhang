@@ -182,5 +182,17 @@
         return request('/data-import/export' + (category ? '?category=' + encodeURIComponent(category) : ''));
       },
     },
+
+    payments: {
+      getConfig: function () { return request('/payments/config'); },
+      getStatus: function (id) { return request('/payments/status/' + id); },
+      simulatePayment: function (id) { return request('/payments/simulate/' + id, { method: 'POST' }); },
+    },
+
+    ai: {
+      chat: function (payload) {
+        return request('/ai/chat', { method: 'POST', body: payload });
+      },
+    },
   };
 })();

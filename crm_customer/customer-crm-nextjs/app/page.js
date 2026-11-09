@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Script from "next/script";
 import bodyMarkup from "./bodyMarkup";
 
-const APP_VERSION = "20261026_1529";
+const APP_VERSION = "20261110_0300";
 
 /**
  * This page renders the original CRM app markup/CSS verbatim, then loads scripts
@@ -41,6 +41,9 @@ export default function Page() {
         dangerouslySetInnerHTML={{ __html: bodyMarkup }}
         suppressHydrationWarning={true}
       />
+
+      {/* Bộ engine html2pdf để xuất file PDF 100% đồng nhất giao diện */}
+      <Script src="/legacy/html2pdf.bundle.min.js" strategy="afterInteractive" />
 
       {/* Bộ engine pdfmake để xuất trực tiếp file PDF không qua form in của trình duyệt */}
       <Script src="/legacy/pdfmake.min.js" strategy="afterInteractive" />

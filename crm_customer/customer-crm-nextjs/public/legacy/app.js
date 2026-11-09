@@ -579,18 +579,7 @@ function renderOrders(){
 }
 
 async function toggleCustomerStage(id){
-  const c = customers.find(x=>x.id===id);
-  if(!c) return;
-  const movingToOrder = c.stage === 'cskh'; // đang từ CSKH -> chuyển sang Đơn hàng
-  try{ await CrmApi.customers.toggleStage(id); await loadAllData(); }
-  catch(err){ appAlert(err.message, {type:'danger', title:'Lỗi'}); return; }
-  if(movingToOrder){
-    // Tab "Đơn hàng" chỉ hiện khách đã có giá trị đơn (price > 0), nên khi vừa đánh dấu
-    // "Đã phát sinh đơn" thì mở luôn form Sửa để nhập sản phẩm/số kg/giá tiền ngay —
-    // nhờ vậy sau khi lưu, đơn sẽ xuất hiện ngay trong tab Đơn hàng thay vì phải vào sửa lại sau.
-    appAlert(`Đã chuyển "${c.name}" sang Đơn hàng.\n\nVui lòng nhập sản phẩm, số lượng và giá tiền cho đơn này để nó hiện ra trong tab "Đơn hàng".`, {type:'success', title:'✅ Chuyển giao thành công'});
-    startEditCustomer(id);
-  }
+  return togglePaymentStatus(id);
 }
 
 // Khóa để gộp các đơn hàng của CÙNG 1 khách lại với nhau: ưu tiên theo SĐT, nếu không có SĐT thì theo tên+địa chỉ
@@ -641,7 +630,7 @@ function renderCustomerRow(c, stage, compactIdentity){
   }
   if(c.nextContactDate) dateLines.push(`<div class="contact-line">Liên hệ: ${formatDateVN(c.nextContactDate)}</div>`);
   const dateInfo = dateLines.length ? dateLines.join('') : '<span class="contact-line">—</span>';
-  const stageToggleLabel = stage === 'cskh' ? '✅ Đã phát sinh đơn' : '🤝 Chuyển về CSKH';
+  const stageToggleLabel = stage === 'cskh' ? '✅ Đã thanh toán' : '🕒 Chuyển công nợ';
 
   const createdLabel = formatDateTimeVN(c.createdAt);
 
@@ -658,7 +647,7 @@ function renderCustomerRow(c, stage, compactIdentity){
     <td>${identityCell}</td>
     <td style="white-space:nowrap;">
       <span class="tag ${tp.c}">${tp.t}</span>
-      <button class="row-action stage-btn" data-action="toggle-stage" data-id="${c.id}" title="Đổi trạng thái chăm sóc">${stageToggleLabel}</button>
+      <button class="row-action stage-btn" data-action="toggle-payment" data-id="${c.id}" title="${stage === 'cskh' ? 'Bấm để đánh dấu đã thanh toán (tự động chuyển sang mục Khách hàng)' : 'Bấm để chuyển sang mục Danh sách công nợ'}">${stageToggleLabel}</button>
     </td>
     <td style="white-space:nowrap;">${c.staff ? escapeHtml(staffLabel[c.staff]) : '<span class="contact-line">—</span>'}</td>
     <td style="white-space:nowrap;">
@@ -742,29 +731,48 @@ function renderCustomerGroupHeaderRow(orders, stage, groupKey){
 }
 
 function renderCustomerList(stage, searchId, typeId, staffId, countId, holderId, paymentId, packedId, deliveredId){
-  const search = document.getElementById(searchId).value.trim().toLowerCase();
-  const filter = document.getElementById(typeId).value;
-  const staffFilter = document.getElementById(staffId).value;
-  const paymentFilter = paymentId ? document.getElementById(paymentId).value : '';
-  const packedFilter = packedId ? document.getElementById(packedId).value : '';
-  const deliveredFilter = deliveredId ? document.getElementById(deliveredId).value : '';
+  const search = document.getElementById(searchId)?.value.trim().toLowerCase() || '';
+  const filter = typeId ? (document.getElementById(typeId)?.value || '') : '';
+  const staffFilter = staffId ? (document.getElementById(staffId)?.value || '') : '';
+  const paymentFilter = paymentId ? (document.getElementById(paymentId)?.value || '') : '';
+  const packedFilter = packedId ? (document.getElementById(packedId)?.value || '') : '';
+  const deliveredFilter = deliveredId ? (document.getElementById(deliveredId)?.value || '') : '';
+
+  // Lọc ngày tháng năm cho mục Danh sách công nợ (cskh)
+  const fromDate = stage === 'cskh' ? (document.getElementById('cskhFromDate')?.value || '') : '';
+  const toDate = stage === 'cskh' ? (document.getElementById('cskhToDate')?.value || '') : '';
+
   let list = customers.filter(c=>{
-    if((c.stage || 'order') !== stage) return false;
+    // Phân loại mục Khách hàng và Danh sách công nợ theo trạng thái thanh toán:
+    // Tab "order" (Khách hàng): Chỉ hiển thị khách đã thanh toán (paymentStatus !== 'chua_tra')
+    // Tab "cskh" (Danh sách công nợ): Chỉ hiển thị khách hàng chưa thanh toán (paymentStatus === 'chua_tra')
+    if(stage === 'order' && c.paymentStatus === 'chua_tra') return false;
+    if(stage === 'cskh' && c.paymentStatus !== 'chua_tra') return false;
+
     const matchSearch = !search || c.name.toLowerCase().includes(search) || c.phone.includes(search);
     const matchFilter = !filter || c.type === filter;
     const matchStaff = !staffFilter || (staffFilter === 'none' ? !c.staff : c.staff === staffFilter);
     const matchPayment = !paymentFilter || c.paymentStatus === paymentFilter;
     const matchPacked = !packedFilter || (packedFilter === 'da' ? !!c.packed : !c.packed);
     const matchDelivered = !deliveredFilter || (deliveredFilter === 'da' ? !!c.delivered : !c.delivered);
-    return matchSearch && matchFilter && matchStaff && matchPayment && matchPacked && matchDelivered;
+
+    let matchDate = true;
+    if(stage === 'cskh' && (fromDate || toDate)){
+      const dateKey = getOrderDateKey(c);
+      const matchFrom = !fromDate || dateKey >= fromDate;
+      const matchTo = !toDate || dateKey <= toDate;
+      matchDate = matchFrom && matchTo;
+    }
+
+    return matchSearch && matchFilter && matchStaff && matchPayment && matchPacked && matchDelivered && matchDate;
   });
 
-  const unitLabel = stage === 'cskh' ? 'khách CSKH' : 'khách hàng';
+  const unitLabel = stage === 'cskh' ? 'khách nợ' : 'khách hàng';
   const holder = document.getElementById(holderId);
 
   if(list.length === 0){
     document.getElementById(countId).textContent = `0 ${unitLabel}`;
-    holder.innerHTML = `<div class="empty">${stage === 'cskh' ? 'Chưa có khách hàng nào đang chăm sóc.' : 'Chưa có khách hàng nào khớp bộ lọc.'}</div>`;
+    holder.innerHTML = `<div class="empty">${stage === 'cskh' ? 'Không có khách hàng nào đang có công nợ.' : 'Chưa có khách hàng nào khớp bộ lọc.'}</div>`;
     return;
   }
 
@@ -789,9 +797,16 @@ function renderCustomerList(stage, searchId, typeId, staffId, countId, holderId,
   const startIdx = (curPage - 1) * PAGE_SIZE;
   const pagedGroups = groups.slice(startIdx, startIdx + PAGE_SIZE);
 
-  document.getElementById(countId).textContent = groupCount !== list.length
-    ? `${list.length} ${unitLabel} — ${groupCount} khách`
-    : `${list.length} ${unitLabel}`;
+  if(stage === 'cskh'){
+    const totalDebtAmount = list.reduce((s, c) => s + (Number(c.price) || 0), 0);
+    document.getElementById(countId).innerHTML = groupCount !== list.length
+      ? `<strong>${list.length} đơn nợ</strong> — ${groupCount} khách &nbsp;•&nbsp; <span style="color:#dc2626;font-weight:700;">Tổng công nợ: ${formatVND(totalDebtAmount)}</span>`
+      : `<strong>${list.length} ${unitLabel}</strong> &nbsp;•&nbsp; <span style="color:#dc2626;font-weight:700;">Tổng công nợ: ${formatVND(totalDebtAmount)}</span>`;
+  } else {
+    document.getElementById(countId).textContent = groupCount !== list.length
+      ? `${list.length} ${unitLabel} — ${groupCount} khách`
+      : `${list.length} ${unitLabel}`;
+  }
 
   const rowsHtml = pagedGroups.map(({key, orders})=>{
     if(orders.length === 1) return renderCustomerRow(orders[0], stage, false);
@@ -1604,8 +1619,8 @@ function exportWarehouseExcel(){
 }
 
 function renderStats(){
-  document.getElementById('statTotal').textContent = customers.length;
-  document.getElementById('statCskh').textContent = customers.filter(c=>(c.stage||'order')==='cskh').length;
+  document.getElementById('statTotal').textContent = customers.filter(c=>c.paymentStatus !== 'chua_tra').length;
+  document.getElementById('statCskh').textContent = customers.filter(c=>c.paymentStatus === 'chua_tra').length;
   document.getElementById('statOld').textContent = customers.filter(c=>c.type==='cu').length;
   document.getElementById('statLead').textContent = customers.filter(c=>c.type==='tiemnang').length;
 }
@@ -1636,172 +1651,275 @@ function closeTransferModal(){
 let currentInvoiceCustomer = null;
 let invoicePreviewIncludeSignatures = true;
 
+/**
+ * Hàm đọc số tiền thành chữ tiếng Việt chuẩn ngân hàng
+ * Ví dụ: 290000 -> "Hai trăm chín mươi nghìn Việt Nam đồng (VND)"
+ */
+function docSoThanhChu(so) {
+  if (!so || isNaN(so) || Number(so) === 0) return 'Không đồng';
+  so = Math.round(Math.abs(Number(so)));
+
+  const chuSo = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+  const lop = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+
+  function doc3So(baso, daydu) {
+    let tram = Math.floor(baso / 100);
+    let chuc = Math.floor((baso % 100) / 10);
+    let donvi = baso % 10;
+    let ketqua = '';
+
+    if (tram > 0 || daydu) {
+      ketqua += chuSo[tram] + ' trăm ';
+    }
+
+    if (chuc > 1) {
+      ketqua += chuSo[chuc] + ' mươi ';
+      if (donvi === 1) ketqua += 'mốt ';
+      else if (donvi === 5) ketqua += 'lăm ';
+      else if (donvi > 0) ketqua += chuSo[donvi] + ' ';
+    } else if (chuc === 1) {
+      ketqua += 'mười ';
+      if (donvi === 5) ketqua += 'lăm ';
+      else if (donvi > 0) ketqua += chuSo[donvi] + ' ';
+    } else if (chuc === 0) {
+      if (donvi > 0) {
+        if (tram > 0 || daydu) ketqua += 'lẻ ';
+        ketqua += chuSo[donvi] + ' ';
+      }
+    }
+    return ketqua.trim();
+  }
+
+  let str = String(so);
+  let groups = [];
+  while (str.length > 0) {
+    groups.unshift(parseInt(str.slice(-3), 10));
+    str = str.slice(0, -3);
+  }
+
+  let ketqua = '';
+  for (let i = 0; i < groups.length; i++) {
+    let g = groups[i];
+    let pos = groups.length - 1 - i;
+    if (g > 0) {
+      let docG = doc3So(g, i > 0);
+      ketqua += docG + ' ' + lop[pos] + ' ';
+    }
+  }
+
+  ketqua = ketqua.trim().replace(/\s+/g, ' ');
+  if (!ketqua) return 'Không đồng';
+  return ketqua.charAt(0).toUpperCase() + ketqua.slice(1) + ' Việt Nam đồng (VND)';
+}
+
+function formatOrderDateTimeShort(val) {
+  if (!val) val = new Date();
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return String(val);
+  const pad = (n) => String(n).padStart(2, '0');
+  const dd = pad(d.getDate());
+  const mm = pad(d.getMonth() + 1);
+  const yy = String(d.getFullYear()).slice(-2);
+  const hh = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  return `${dd}/${mm}/${yy} ${hh}:${min}`;
+}
+
+function formatReceiptVND(n){
+  const num = Math.round(Number(n) || 0);
+  return num.toLocaleString('en-US') + '₫';
+}
+
 function generateInvoiceHtml(c, options = {}){
-  const includeSignatures = (options.includeSignatures !== undefined) ? !!options.includeSignatures : true;
   const product = c.productId ? products.find(p=>p.id===c.productId) : null;
   const combo = c.comboId ? combos.find(x=>x.id===c.comboId) : null;
   const giftProduct = (combo && combo.giftProductId) ? products.find(p=>p.id===combo.giftProductId) : null;
-  const staffName = c.staff ? (staffLabel[c.staff] || c.staff) : 'Cửa hàng';
-  const orderDate = c.lastOrderDate ? formatDateVN(c.lastOrderDate) : formatDateTimeVN(c.createdAt || Date.now());
-  const invoiceCode = 'HD-' + String(c.id).padStart(5, '0');
+  
+  const staffName = c.staff ? (staffLabel[c.staff] || c.staff) : (currentUser ? currentUser.username : 'Ngọc Thương');
+  const staffPhone = '0706839434';
+  const staffDisplay = staffName.includes('(') ? staffName : `${staffName} (${staffPhone})`;
+
+  const orderDateStr = formatOrderDateTimeShort(c.lastOrderDate || c.createdAt);
+  const orderCode = 'DH' + c.id;
   const isPaid = c.paymentStatus !== 'chua_tra';
 
   let itemName = 'Sản phẩm gạo / nông sản';
   let unit = 'kg';
   let unitPrice = (c.kg && Number(c.kg) > 0) ? Math.round(Number(c.price) / Number(c.kg)) : Number(c.price);
+  let qty = combo ? 1 : (Number(c.kg) || 1);
 
   if(combo){
-    itemName = 'Combo: ' + combo.name;
-    unit = 'combo';
-    unitPrice = Number(c.price);
+    itemName = combo.name;
+    unit = combo.unit || 'combo';
+    unitPrice = Number(combo.unitPrice) || Number(c.price);
   } else if(product){
     itemName = product.name;
     unit = product.unit || 'kg';
+    if(product.sellPrice && Number(product.sellPrice) > 0){
+      unitPrice = Number(product.sellPrice);
+    }
   }
 
-  let giftRow = '';
+  const subtotal = Math.round(unitPrice * qty);
+  const finalPrice = Math.round(Number(c.price) || 0);
+  const discount = subtotal > finalPrice ? (subtotal - finalPrice) : 0;
+  const docTien = docSoThanhChu(finalPrice);
+
+  let giftItemHtml = '';
   if(combo && giftProduct && combo.giftQty){
-    giftRow = `
-      <tr style="border-bottom:1px solid #e2e8f0;background:#fcfdfd;">
-        <td style="text-align:center;padding:10px;">2</td>
-        <td style="padding:10px;">
-          <strong style="color:#0f172a;">🎁 Quà tặng kèm: ${escapeHtml(giftProduct.name)}</strong>
-          <div style="font-size:12px;color:#64748b;">(Ưu đãi kèm theo combo "${escapeHtml(combo.name)}")</div>
-        </td>
-        <td style="text-align:center;padding:10px;">${escapeHtml(giftProduct.unit || 'cái')}</td>
-        <td style="text-align:center;padding:10px;font-weight:bold;">${combo.giftQty}</td>
-        <td style="text-align:right;padding:10px;">0đ</td>
-        <td style="text-align:right;padding:10px;font-weight:bold;color:#16a34a;">0đ (Miễn phí)</td>
-      </tr>
+    giftItemHtml = `
+      <div style="margin-top:6px;padding-top:6px;border-top:1px dashed #e2e8f0;">
+        <div style="font-weight:700;color:#15803d;font-size:12px;">🎁 Quà tặng kèm: ${escapeHtml(giftProduct.name)}</div>
+        <div style="display:grid;grid-template-columns:1fr 50px 105px;align-items:center;font-size:12px;color:#64748b;margin-top:2px;">
+          <div>0₫</div>
+          <div style="text-align:center;"><span style="display:inline-block;background:#f0fdf4;color:#166534;font-weight:700;padding:1px 6px;border-radius:4px;">${combo.giftQty}</span></div>
+          <div style="text-align:right;color:#16a34a;font-weight:700;">0₫ (Miễn phí)</div>
+        </div>
+      </div>
     `;
   }
 
-  const signaturesHtml = includeSignatures ? `
-    <!-- Ký nhận 3 bên (Chỉ hiển thị khi In ra giấy) -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;gap:14px;margin-top:30px;padding-top:16px;border-top:1px dashed #cbd5e1;" class="invoice-signatures">
-      <div>
-        <div style="font-size:13.5px;font-weight:800;color:#0f172a;">Người lập hóa đơn</div>
-        <div style="font-size:11.5px;color:#64748b;font-style:italic;">(Ký, ghi rõ họ tên)</div>
-        <div style="height:60px;"></div>
-        <div style="font-weight:700;font-size:13px;color:#1e293b;">${escapeHtml(currentUser ? currentUser.username : staffName)}</div>
-      </div>
-      <div>
-        <div style="font-size:13.5px;font-weight:800;color:#0f172a;">Người giao hàng</div>
-        <div style="font-size:11.5px;color:#64748b;font-style:italic;">(Ký, ghi rõ họ tên)</div>
-        <div style="height:60px;"></div>
-      </div>
-      <div>
-        <div style="font-size:13.5px;font-weight:800;color:#0f172a;">Người nhận hàng</div>
-        <div style="font-size:11.5px;color:#64748b;font-style:italic;">(Ký, ghi rõ họ tên)</div>
-        <div style="height:60px;"></div>
-        <div style="font-weight:700;font-size:13px;color:#1e293b;">${escapeHtml(c.name)}</div>
-      </div>
-    </div>
-  ` : '';
-
   return `
-  <div class="invoice-paper" id="invoicePaper">
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #0f172a;padding-bottom:16px;margin-bottom:18px;">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <img src="/assets/logo.png" alt="Logo" style="width:64px;height:64px;border-radius:12px;object-fit:cover;" onerror="this.style.display='none'">
-        <div>
-          <div style="font-size:22px;font-weight:900;color:#0f172a;letter-spacing:-0.01em;">VỊ NGUYÊN FOOD</div>
-          <div style="font-size:12.5px;color:#d97706;font-weight:700;font-style:italic;">Từ giọt phù sa đến bàn ăn người Việt</div>
-          <div style="font-size:12px;color:#64748b;margin-top:2px;">Hotline / Zalo: 0907.441.019 • Giao hàng tận nơi</div>
-        </div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:24px;font-weight:900;color:#2563eb;letter-spacing:0.02em;">HÓA ĐƠN BÁN HÀNG</div>
-        <div style="font-size:13.5px;font-weight:700;color:#0f172a;margin-top:2px;">Mã hóa đơn: <span style="font-family:monospace;letter-spacing:0.05em;color:#1d4ed8;">${invoiceCode}</span></div>
-        <div style="font-size:12.5px;color:#64748b;margin-top:2px;">Ngày lập: <strong>${orderDate}</strong></div>
+  <div class="invoice-paper" id="invoicePaper" style="max-width:460px;width:100%;margin:0 auto;background:#ffffff;padding:22px 24px;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12.5px;line-height:1.5;box-sizing:border-box;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 20px -2px rgba(15,23,42,0.08);">
+
+    <!-- 1. Header: Logo & Thông tin thương hiệu -->
+    <div style="display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:2px solid #0f172a;margin-bottom:12px;">
+      <img src="/assets/logo.png" alt="Logo" style="width:58px;height:58px;border-radius:10px;object-fit:cover;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.06);border:1px solid #e2e8f0;" onerror="this.src='/assets/logo.jpg'">
+      <div style="line-height:1.45;color:#0f172a;">
+        <div style="font-weight:900;font-size:15px;color:#0f172a;letter-spacing:0.02em;text-transform:uppercase;">Vị Nguyên Food (Vigen Food)</div>
+        <div style="font-size:11.5px;color:#15803d;font-weight:600;margin-top:1px;">🌾 Gạo sạch & Nông sản nguyên chất</div>
+        <div style="font-size:12px;color:#334155;margin-top:2px;">📞 Hotline / Zalo: <strong>0706.839.434</strong></div>
+        <div style="font-size:11.5px;color:#64748b;margin-top:1px;">📍 Đ/C: 185/17, Phạm Văn Chiêu, P.14, Gò Vấp, TP.HCM</div>
       </div>
     </div>
 
-    <!-- Thông tin khách hàng & Giao nhận -->
-    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:12px;padding:16px 18px;margin-bottom:20px;">
-      <div>
-        <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">KHÁCH HÀNG (NGƯỜI NHẬN)</div>
-        <div style="font-size:16px;font-weight:800;color:#0f172a;">${escapeHtml(c.name)}</div>
-        <div style="font-size:14px;color:#1d4ed8;font-weight:700;margin-top:4px;">📞 SĐT: ${escapeHtml(c.phone || '—')}</div>
-        <div style="font-size:13px;color:#334155;margin-top:4px;line-height:1.45;">📍 Địa chỉ: <strong>${escapeHtml(c.address || 'Tại cửa hàng')}</strong></div>
+    <!-- 2. Tiêu đề & Mã đơn hàng -->
+    <div style="text-align:center;margin:10px 0 14px 0;">
+      <div style="display:inline-block;background:#eff6ff;color:#1e40af;font-size:12px;font-weight:700;padding:3px 12px;border-radius:20px;border:1px solid #bfdbfe;margin-bottom:4px;font-family:monospace;">
+        Mã đơn hàng: ${orderCode}
       </div>
-      <div>
-        <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">THÔNG TIN ĐƠN HÀNG</div>
-        <div style="font-size:13px;color:#334155;margin-bottom:4px;">Nhân viên tư vấn: <strong>${escapeHtml(staffName)}</strong></div>
-        <div style="font-size:13px;color:#334155;margin-bottom:4px;">Ngày giao dự kiến: <strong>${c.deliveryDate ? formatDateVN(c.deliveryDate) : 'Giao ngay'}</strong></div>
-        <div style="font-size:13px;color:#334155;line-height:1.4;">Ghi chú: <em>${escapeHtml(c.note || 'Không có')}</em></div>
+      <div style="font-size:20px;font-weight:900;color:#0f172a;letter-spacing:0.04em;margin-top:2px;">
+        HÓA ĐƠN BÁN HÀNG
       </div>
     </div>
 
-    <!-- Bảng chi tiết hàng hóa -->
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13.5px;">
-      <thead>
-        <tr style="background:#f1f5f9;border-top:2px solid #0f172a;border-bottom:2px solid #0f172a;">
-          <th style="padding:11px 10px;text-align:center;width:40px;font-weight:800;color:#0f172a;">STT</th>
-          <th style="padding:11px 12px;text-align:left;font-weight:800;color:#0f172a;">Tên sản phẩm / Quy cách đóng gói</th>
-          <th style="padding:11px 10px;text-align:center;width:70px;font-weight:800;color:#0f172a;">ĐVT</th>
-          <th style="padding:11px 10px;text-align:center;width:80px;font-weight:800;color:#0f172a;">Số lượng</th>
-          <th style="padding:11px 12px;text-align:right;width:120px;font-weight:800;color:#0f172a;">Đơn giá</th>
-          <th style="padding:11px 12px;text-align:right;width:130px;font-weight:800;color:#0f172a;">Thành tiền</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid #cbd5e1;">
-          <td style="text-align:center;padding:12px 10px;">1</td>
-          <td style="padding:12px 12px;">
-            <strong style="color:#0f172a;font-size:14px;">${escapeHtml(itemName)}</strong>
-            ${c.kg && !combo ? `<div style="font-size:12px;color:#64748b;margin-top:2px;">Khối lượng tịnh: ${c.kg} ${unit}</div>` : ''}
-          </td>
-          <td style="text-align:center;padding:12px 10px;">${escapeHtml(unit)}</td>
-          <td style="text-align:center;padding:12px 10px;font-weight:800;color:#0f172a;font-size:14px;">${combo ? 1 : (c.kg || 1)}</td>
-          <td style="text-align:right;padding:12px 12px;">${formatVND(unitPrice)}</td>
-          <td style="text-align:right;padding:12px 12px;font-weight:800;color:#0f172a;font-size:14px;">${formatVND(c.price || 0)}</td>
-        </tr>
-        ${giftRow}
-      </tbody>
-    </table>
-
-    <!-- Tổng kết thanh toán -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-top:1.5px solid #cbd5e1;padding-top:14px;">
-      <div style="font-size:13px;max-width:340px;">
-        <div style="font-weight:800;color:#0f172a;margin-bottom:5px;">Trạng thái thanh toán:</div>
-        <div style="display:inline-block;padding:5px 12px;border-radius:6px;font-weight:800;font-size:13px;${isPaid ? 'background:#dcfce7;color:#14532d;border:1.5px solid #86efac;' : 'background:#fef3c7;color:#78350f;border:1.5px solid #fcd34d;'}">
-          ${isPaid ? '✅ ĐÃ THANH TOÁN ĐỦ' : '🕒 CHƯA THANH TOÁN (CÔNG NỢ)'}
-        </div>
-        <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.45;">
-          * Quý khách vui lòng kiểm tra kỹ số lượng và chất lượng sản phẩm trước khi nhận hàng.
-        </div>
+    <!-- 3. Thông tin khách hàng & NV phụ trách (Thiết kế thẻ gọn gàng, thanh lịch) -->
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:#1e293b;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div><span style="color:#64748b;font-weight:600;">Khách hàng:</span> <strong style="color:#0f172a;font-size:13px;">${escapeHtml(c.name || 'Khách vãng lai')}</strong> ${c.note ? `<span style="color:#64748b;font-size:11.5px;">(${escapeHtml(c.note)})</span>` : ''}</div>
+        <div><span style="color:#64748b;font-weight:600;">SĐT:</span> <strong style="color:#2563eb;">${escapeHtml(c.phone || '—')}</strong></div>
       </div>
-      <div style="text-align:right;min-width:260px;">
-        <div style="display:flex;justify-content:space-between;font-size:13.5px;color:#475569;margin-bottom:6px;">
-          <span>Tổng tiền hàng:</span>
-          <strong style="color:#0f172a;">${formatVND(c.price || 0)}</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13.5px;color:#475569;margin-bottom:6px;">
-          <span>Phí vận chuyển:</span>
-          <strong style="color:#059669;">Miễn phí (0đ)</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:900;color:#1d4ed8;border-top:2px solid #2563eb;padding-top:8px;margin-top:6px;">
-          <span>TỔNG CỘNG:</span>
-          <span>${formatVND(c.price || 0)}</span>
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px;padding-top:3px;border-top:1px dashed #e2e8f0;">
+        <div><span style="color:#64748b;font-weight:600;">Ngày đặt:</span> <strong style="color:#334155;">${orderDateStr}</strong></div>
+        <div><span style="color:#64748b;font-weight:600;">NV tạo đơn:</span> <strong style="color:#334155;">${escapeHtml(staffDisplay)}</strong></div>
       </div>
     </div>
 
-    ${signaturesHtml}
-
-    <!-- Lời cảm ơn -->
-    <div style="text-align:center;font-size:12.5px;color:#64748b;margin-top:24px;border-top:1px solid #f1f5f9;padding-top:12px;font-style:italic;">
-      Vị Nguyên Food chân thành cảm ơn Quý khách! Kính chúc Quý khách bữa cơm ngon miệng và nhiều sức khỏe!
+    <!-- 4. Header bảng sản phẩm: ĐG | SL | Thành tiền -->
+    <div style="display:grid;grid-template-columns:1fr 50px 105px;background:#f1f5f9;padding:6px 10px;font-weight:800;font-size:11.5px;color:#334155;border-radius:6px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.03em;">
+      <div>Đơn giá (ĐG)</div>
+      <div style="text-align:center;">SL</div>
+      <div style="text-align:right;">Thành tiền</div>
     </div>
+
+    <!-- Chi tiết sản phẩm -->
+    <div style="padding:2px 8px 6px 8px;">
+      <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:4px;">
+        ${escapeHtml(itemName)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 50px 105px;align-items:center;font-size:12.5px;color:#334155;">
+        <div style="color:#64748b;font-weight:500;">${formatReceiptVND(unitPrice)}</div>
+        <div style="text-align:center;"><span style="display:inline-block;background:#f1f5f9;font-weight:700;color:#0f172a;padding:1px 8px;border-radius:4px;font-size:12px;">${qty}</span></div>
+        <div style="text-align:right;font-weight:700;color:#0f172a;font-size:13px;">${formatReceiptVND(subtotal)}</div>
+      </div>
+      ${giftItemHtml}
+    </div>
+
+    <!-- Đường nét đứt ngăn cách -->
+    <div style="border-top:1.5px dashed #cbd5e1;margin:8px 0 10px 0;"></div>
+
+    <!-- 5. Chiết khấu & Phí vận chuyển -->
+    <div style="font-size:12.5px;line-height:1.7;color:#334155;padding:0 8px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span>Giảm giá đơn hàng:</span>
+        <strong style="color:${discount > 0 ? '#dc2626' : '#64748b'};">${discount > 0 ? '-' + formatReceiptVND(discount) : '0₫'}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:2px;">
+        <span>Phí vận chuyển:</span>
+        <strong style="color:#16a34a;">0₫ (Miễn phí)</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:2px;">
+        <span>Giảm giá vận chuyển:</span>
+        <strong style="color:#64748b;">0₫</strong>
+      </div>
+    </div>
+
+    <!-- 6. Thành tiền & Đọc số thành chữ -->
+    <div style="border-top:2px solid #0f172a;padding-top:10px;margin-top:10px;padding-left:8px;padding-right:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:900;font-size:14px;color:#0f172a;letter-spacing:0.03em;text-transform:uppercase;">THÀNH TIỀN:</span>
+        <span style="font-weight:900;font-size:18px;color:#1e40af;">${formatReceiptVND(finalPrice)}</span>
+      </div>
+      <div style="text-align:right;font-size:11px;font-style:italic;color:#64748b;margin-top:2px;">
+        (${docTien})
+      </div>
+    </div>
+
+    <!-- 7. Thanh toán & Công nợ -->
+    <div style="border-top:1px dashed #cbd5e1;margin-top:10px;padding-top:8px;font-size:12.5px;line-height:1.7;padding-left:8px;padding-right:8px;">
+      <div style="display:flex;justify-content:space-between;color:#475569;">
+        <span>Khách đã thanh toán:</span>
+        <strong style="color:${isPaid ? '#15803d' : '#64748b'};">${isPaid ? formatReceiptVND(finalPrice) : '0₫'}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+        <span style="font-weight:800;color:#0f172a;font-size:13px;">Khách còn phải trả:</span>
+        <strong style="color:${isPaid ? '#15803d' : '#dc2626'};font-size:15px;font-weight:900;">${isPaid ? '0₫ (Đã thanh toán)' : formatReceiptVND(finalPrice)}</strong>
+      </div>
+    </div>
+
+    <!-- 8. Khối VietQR thanh toán nhanh (MB Bank) -->
+    ${!isPaid && finalPrice > 0 ? `
+      <div style="text-align:center;margin-top:14px;padding:12px 10px;background:#f8fafc;border-radius:10px;border:1px dashed #94a3b8;">
+        <div style="font-size:11.5px;font-weight:800;color:#166534;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span>📱 QUÉT MÃ VIETQR ĐỂ THANH TOÁN</span>
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;"></span>
+        </div>
+        <div style="display:inline-block;background:#ffffff;padding:6px;border-radius:8px;border:1px solid #e2e8f0;box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+          <img src="https://img.vietqr.io/image/MB-0939803856-qr_only.png?amount=${finalPrice}&addInfo=${orderCode}&accountName=${encodeURIComponent('NGUYEN AI THI')}" alt="VietQR" style="width:130px;height:130px;display:block;object-fit:contain;">
+        </div>
+        <div style="font-size:11px;color:#475569;margin-top:6px;line-height:1.45;">
+          Ngân hàng: <strong style="color:#1e40af;">MB Bank</strong> • STK: <strong style="color:#1e40af;">0939803856</strong><br>
+          Chủ TK: <strong style="color:#0f172a;">NGUYEN AI THI</strong> • Nội dung: <strong style="color:#1e40af;">${orderCode}</strong>
+        </div>
+      </div>
+    ` : (isPaid ? `
+      <div style="text-align:center;margin-top:14px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
+        <span style="display:inline-block;color:#15803d;font-weight:800;font-size:13px;">
+          ✅ ĐƠN HÀNG ĐÃ THANH TOÁN THÀNH CÔNG
+        </span>
+      </div>
+    ` : '')}
+
+    <!-- 9. Lời cảm ơn chân thành -->
+    <div style="text-align:center;margin-top:14px;padding-top:10px;border-top:1px dashed #cbd5e1;font-size:11px;color:#64748b;line-height:1.45;">
+      <div>🙏 Cảm ơn Quý khách đã tin tưởng và đồng hành cùng <strong>Vị Nguyên Food</strong>!</div>
+      <div style="margin-top:2px;font-size:10px;color:#94a3b8;">Hóa đơn bán hàng điện tử • In & phát hành tự động</div>
+    </div>
+
   </div>
   `;
 }
 
+let invoicePollTimer = null;
+
 function showInvoiceModal(c){
   if(!c) return;
   currentInvoiceCustomer = c;
+
+  if(invoicePollTimer){
+    clearInterval(invoicePollTimer);
+    invoicePollTimer = null;
+  }
 
   // Xóa dứt điểm nếu còn sót phần tử cũ trong DOM do trình duyệt lưu cache
   const oldTopExport = document.getElementById('exportPdfBtn');
@@ -1820,31 +1938,88 @@ function showInvoiceModal(c){
   if(title) title.textContent = '🧾 Hóa đơn bán hàng — ' + c.name;
   const modal = document.getElementById('invoiceModalOverlay');
   if(modal) modal.classList.add('active');
+
+  // Nếu đơn hàng chưa thanh toán và có giá trị > 0, bật polling kiểm tra biến động số dư VietQR mỗi 3 giây
+  if(c.paymentStatus === 'chua_tra' && Number(c.price) > 0){
+    invoicePollTimer = setInterval(async () => {
+      try {
+        if(!currentInvoiceCustomer || currentInvoiceCustomer.id !== c.id){
+          if(invoicePollTimer) { clearInterval(invoicePollTimer); invoicePollTimer = null; }
+          return;
+        }
+        if(!window.CrmApi || !window.CrmApi.payments) return;
+        const res = await window.CrmApi.payments.getStatus(c.id);
+        if(res && res.paymentStatus === 'da_tra'){
+          if(invoicePollTimer) { clearInterval(invoicePollTimer); invoicePollTimer = null; }
+          currentInvoiceCustomer.paymentStatus = 'da_tra';
+          c.paymentStatus = 'da_tra';
+
+          const target = customers.find(x => x.id === c.id);
+          if(target) target.paymentStatus = 'da_tra';
+
+          if(area) area.innerHTML = generateInvoiceHtml(currentInvoiceCustomer, { includeSignatures: false });
+          if(typeof renderCustomerList === 'function') renderCustomerList();
+          if(typeof renderOrders === 'function') renderOrders();
+
+          if(typeof appAlert === 'function'){
+            appAlert(`🎉 Khách hàng đã thanh toán thành công đơn hàng HD-${String(c.id).padStart(5, '0')} qua VietQR!`, { type: 'success', title: 'Thanh toán thành công' });
+          }
+        }
+      } catch (err) {
+        // bỏ qua lỗi tạm thời trong lúc poll
+      }
+    }, 3000);
+  }
 }
 
 function closeInvoiceModal(){
+  if(invoicePollTimer){
+    clearInterval(invoicePollTimer);
+    invoicePollTimer = null;
+  }
   currentInvoiceCustomer = null;
   const modal = document.getElementById('invoiceModalOverlay');
   if(modal) modal.classList.remove('active');
 }
 
+async function checkInvoicePaymentManual(){
+  if(!currentInvoiceCustomer) return;
+  const c = currentInvoiceCustomer;
+  try {
+    if(!window.CrmApi || !window.CrmApi.payments){
+      appAlert('Chưa kết nối được cổng kiểm tra thanh toán.', { type: 'error' });
+      return;
+    }
+    const res = await window.CrmApi.payments.getStatus(c.id);
+    if(res && res.paymentStatus === 'da_tra'){
+      currentInvoiceCustomer.paymentStatus = 'da_tra';
+      c.paymentStatus = 'da_tra';
+      const target = customers.find(x => x.id === c.id);
+      if(target) target.paymentStatus = 'da_tra';
+
+      const area = document.getElementById('invoiceContentArea');
+      if(area) area.innerHTML = generateInvoiceHtml(currentInvoiceCustomer, { includeSignatures: false });
+      if(typeof renderCustomerList === 'function') renderCustomerList();
+      if(typeof renderOrders === 'function') renderOrders();
+
+      appAlert(`✅ Đơn hàng HD-${String(c.id).padStart(5, '0')} đã được ghi nhận ĐÃ THANH TOÁN!`, { type: 'success', title: 'Đã thanh toán' });
+    } else {
+      appAlert(`Chưa nhận được giao dịch cho đơn hàng HD-${c.id} trên tài khoản MB Bank. Vui lòng thử lại sau giây lát hoặc nhắc khách quét đúng mã QR!`, { type: 'info', title: 'Chưa nhận tiền' });
+    }
+  } catch (err) {
+    appAlert('Lỗi kiểm tra thanh toán: ' + (err.message || 'Không thể kết nối máy chủ'), { type: 'error' });
+  }
+}
+
 function openPrintWindow(c, options = {}){
-  const includeSignatures = (options.includeSignatures !== undefined) ? !!options.includeSignatures : true;
-  const isExport = !!options.isExport;
-  const invoiceHtml = generateInvoiceHtml(c, { includeSignatures });
-  const printWindow = window.open('', '_blank', 'width=880,height=920');
+  const invoiceHtml = generateInvoiceHtml(c);
+  const printWindow = window.open('', '_blank', 'width=680,height=900');
   if(!printWindow){
     showInvoiceModal(c);
     return;
   }
   const cleanName = (c.name || 'Khach_Hang').replace(/[^\w\s\u00C0-\u1EF9]/gi, '').trim().replace(/\s+/g, '_');
-  const title = isExport ? `Xuat_Hoa_don_${cleanName}_HD${c.id}` : `In_Hoa_don_${cleanName}_HD${c.id}`;
-
-  const bannerText = isExport
-    ? '💡 <strong>Hóa đơn xuất file (đã bỏ chữ ký):</strong> Vui lòng chọn <strong>"Save as PDF" (Lưu dưới dạng PDF)</strong> tại mục Máy in để lưu file gửi khách.'
-    : '💡 <strong>Hóa đơn in giấy (có chữ ký):</strong> Chọn máy in của bạn để in ra giấy cho shipper giao hàng và ký nhận.';
-
-  const actionBtnText = isExport ? '📥 Lưu file PDF' : '🖨️ In ra giấy';
+  const title = `Hoa_don_${cleanName}_DH${c.id}`;
 
   printWindow.document.write(`<!DOCTYPE html>
 <html>
@@ -1853,32 +2028,50 @@ function openPrintWindow(c, options = {}){
   <title>${title}</title>
   <style>
     @page {
-      size: A4;
-      margin: 12mm 15mm;
+      size: auto;
+      margin: 8mm auto;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
-      padding: 24px;
-      color: #0f172a;
-      background: #ffffff;
+      padding: 16px;
+      color: #000000;
+      background: #f8fafc;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
     .invoice-paper {
-      max-width: 820px;
+      max-width: 440px;
       margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      padding: 18px 20px !important;
     }
     @media print {
-      body { padding: 0; }
-      .no-print { display: none !important; }
+      body {
+        padding: 0 !important;
+        background: #ffffff !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .invoice-paper {
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="no-print" style="margin-bottom:18px;padding:12px 18px;background:${isExport ? '#ecfdf5' : '#eff6ff'};border:1.5px solid ${isExport ? '#a7f3d0' : '#bfdbfe'};border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
-    <span style="font-size:13.5px;font-weight:600;color:${isExport ? '#065f46' : '#1e40af'};">${bannerText}</span>
-    <button onclick="window.print()" style="background:${isExport ? '#059669' : '#2563eb'};color:#fff;border:none;padding:9px 20px;border-radius:7px;font-weight:700;cursor:pointer;font-size:13.5px;box-shadow:0 2px 4px rgba(0,0,0,0.15);">${actionBtnText}</button>
+  <div class="no-print" style="max-width:440px;margin:0 auto 12px auto;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:12px;font-weight:600;color:#1e40af;">
+      💡 Chọn <strong>"Save as PDF"</strong> để lưu file hoặc chọn máy in để in ra giấy.
+    </span>
+    <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">🖨️ In / Lưu PDF</button>
   </div>
   ${invoiceHtml}
   <script>
@@ -1894,8 +2087,7 @@ function openPrintWindow(c, options = {}){
 function printInvoice(c){
   if(!c) c = currentInvoiceCustomer;
   if(!c) return;
-  // In ra giấy -> Bắt buộc có phần chữ ký, mở cửa sổ in ấn
-  openPrintWindow(c, { includeSignatures: true, isExport: false });
+  openPrintWindow(c);
 }
 
 let cachedLogoBase64 = null;
@@ -1917,9 +2109,58 @@ async function getLogoBase64() {
   }
 }
 
+let cachedVietQrSvg = {};
+async function getVietQrSvg(amount, customerId) {
+  const cacheKey = `${customerId}_${amount}`;
+  if (cachedVietQrSvg[cacheKey]) return cachedVietQrSvg[cacheKey];
+
+  const amt = Math.round(Number(amount) || 0);
+  const memo = encodeURIComponent('DH' + customerId);
+
+  const apiBase = (window.CrmApi && window.CrmApi.getApiBase) ? window.CrmApi.getApiBase() : (window.__API_BASE__ || 'http://localhost:3001/api');
+
+  // 1. Thử qua apiBase trực tiếp tới backend
+  try {
+    const res = await fetch(`${apiBase}/payments/qr?amount=${amt}&orderCode=DH${customerId}`);
+    if(res.ok){
+      const text = await res.text();
+      if(text && text.includes('<svg')){
+        cachedVietQrSvg[cacheKey] = text;
+        return text;
+      }
+    }
+  } catch (e) {}
+
+  // 2. Thử đường dẫn tương đối /api/payments/qr (nhờ Next.js rewrite)
+  try {
+    const res = await fetch(`/api/payments/qr?amount=${amt}&orderCode=DH${customerId}`);
+    if(res.ok){
+      const text = await res.text();
+      if(text && text.includes('<svg')){
+        cachedVietQrSvg[cacheKey] = text;
+        return text;
+      }
+    }
+  } catch (e) {}
+
+  // 3. Thử qua qr-base64
+  try {
+    const res = await fetch(`${apiBase}/payments/qr-base64?amount=${amt}&orderCode=DH${customerId}`);
+    if(res.ok){
+      const json = await res.json();
+      if(json && json.dataUrl){
+        cachedVietQrSvg[cacheKey] = json.dataUrl;
+        return json.dataUrl;
+      }
+    }
+  } catch (e) {}
+
+  return null;
+}
+
 async function generatePdfWithPdfMake(c){
   if(!window.pdfMake){
-    openPrintWindow(c, { includeSignatures: false, isExport: true });
+    openPrintWindow(c, { isExport: true });
     return;
   }
   if(window.pdfFonts && window.pdfFonts.pdfMake){
@@ -1929,255 +2170,270 @@ async function generatePdfWithPdfMake(c){
   }
 
   const logoBase64 = await getLogoBase64();
+  const qrVal = (c.paymentStatus === 'chua_tra' && Number(c.price) > 0) ? await getVietQrSvg(c.price, c.id) : null;
   const product = c.productId ? products.find(p=>p.id===c.productId) : null;
   const combo = c.comboId ? combos.find(x=>x.id===c.comboId) : null;
   const giftProduct = (combo && combo.giftProductId) ? products.find(p=>p.id===combo.giftProductId) : null;
-  const staffName = c.staff ? (staffLabel[c.staff] || c.staff) : 'Cửa hàng';
-  const orderDate = c.lastOrderDate ? formatDateVN(c.lastOrderDate) : formatDateTimeVN(c.createdAt || Date.now());
-  const invoiceCode = 'HD-' + String(c.id).padStart(5, '0');
+  
+  const staffName = c.staff ? (staffLabel[c.staff] || c.staff) : (currentUser ? currentUser.username : 'Ngọc Thương');
+  const staffPhone = '0706839434';
+  const staffDisplay = staffName.includes('(') ? staffName : `${staffName} (${staffPhone})`;
+
+  const orderDateStr = formatOrderDateTimeShort(c.lastOrderDate || c.createdAt);
+  const orderCode = 'DH' + c.id;
   const isPaid = c.paymentStatus !== 'chua_tra';
 
   let itemName = 'Sản phẩm gạo / nông sản';
   let unit = 'kg';
   let unitPrice = (c.kg && Number(c.kg) > 0) ? Math.round(Number(c.price) / Number(c.kg)) : Number(c.price);
+  let qty = combo ? 1 : (Number(c.kg) || 1);
 
   if(combo){
-    itemName = 'Combo: ' + combo.name;
-    unit = 'combo';
-    unitPrice = Number(c.price);
+    itemName = combo.name;
+    unit = combo.unit || 'combo';
+    unitPrice = Number(combo.unitPrice) || Number(c.price);
   } else if(product){
     itemName = product.name;
     unit = product.unit || 'kg';
+    if(product.sellPrice && Number(product.sellPrice) > 0){
+      unitPrice = Number(product.sellPrice);
+    }
   }
 
-  const tableBody = [
-    [
-      { text: 'STT', bold: true, alignment: 'center', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
-      { text: 'Tên sản phẩm / Quy cách đóng gói', bold: true, fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
-      { text: 'ĐVT', bold: true, alignment: 'center', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
-      { text: 'Số lượng', bold: true, alignment: 'center', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
-      { text: 'Đơn giá', bold: true, alignment: 'right', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] },
-      { text: 'Thành tiền', bold: true, alignment: 'right', fillColor: '#f1f5f9', margin: [0, 5, 0, 5] }
-    ],
-    [
-      { text: '1', alignment: 'center', margin: [0, 6, 0, 6] },
-      {
-        stack: [
-          { text: itemName, bold: true, color: '#0f172a', fontSize: 10 },
-          (c.kg && !combo) ? { text: `Quy cách đóng gói: ${c.kg} ${unit}`, fontSize: 8.5, color: '#64748b', margin: [0, 2, 0, 0] } : { text: '' }
-        ],
-        margin: [0, 6, 0, 6]
-      },
-      { text: unit, alignment: 'center', margin: [0, 6, 0, 6] },
-      { text: String(combo ? 1 : (c.kg || 1)), alignment: 'center', bold: true, margin: [0, 6, 0, 6] },
-      { text: formatVND(unitPrice), alignment: 'right', margin: [0, 6, 0, 6] },
-      { text: formatVND(c.price || 0), alignment: 'right', bold: true, margin: [0, 6, 0, 6], color: '#0f172a' }
-    ]
-  ];
-
-  if(combo && giftProduct && combo.giftQty){
-    tableBody.push([
-      { text: '2', alignment: 'center', margin: [0, 5, 0, 5] },
-      {
-        stack: [
-          { text: `Quà tặng kèm: ${giftProduct.name}`, bold: true, color: '#0f172a' },
-          { text: `(Ưu đãi kèm theo combo "${combo.name}")`, fontSize: 8, color: '#64748b' }
-        ],
-        margin: [0, 5, 0, 5]
-      },
-      { text: giftProduct.unit || 'cái', alignment: 'center', margin: [0, 5, 0, 5] },
-      { text: String(combo.giftQty), alignment: 'center', bold: true, margin: [0, 5, 0, 5] },
-      { text: '0đ', alignment: 'right', margin: [0, 5, 0, 5] },
-      { text: '0đ (Miễn phí)', alignment: 'right', bold: true, color: '#16a34a', margin: [0, 5, 0, 5] }
-    ]);
-  }
+  const subtotal = Math.round(unitPrice * qty);
+  const finalPrice = Math.round(Number(c.price) || 0);
+  const discount = subtotal > finalPrice ? (subtotal - finalPrice) : 0;
+  const docTien = docSoThanhChu(finalPrice);
 
   const cleanName = (c.name || 'Khach_Hang').replace(/[^\w\s\u00C0-\u1EF9]/gi, '').trim().replace(/\s+/g, '_');
-  const filename = `Hoa_don_${cleanName}_HD${c.id}.pdf`;
+  const filename = `Hoa_don_${cleanName}_DH${c.id}.pdf`;
 
   const headerColumns = [];
   if(logoBase64){
     headerColumns.push({
-      width: 58,
+      width: 48,
       image: logoBase64,
-      fit: [50, 50]
+      fit: [44, 44],
+      margin: [0, 0, 8, 0]
     });
   }
   headerColumns.push({
     width: '*',
-    margin: [logoBase64 ? 10 : 0, 0, 0, 0],
     stack: [
-      { text: 'VỊ NGUYÊN FOOD', fontSize: 18, bold: true, color: '#0f172a' },
-      { text: 'Từ giọt phù sa đến bàn ăn người Việt', fontSize: 10, bold: true, italics: true, color: '#d97706', margin: [0, 2, 0, 0] },
-      { text: 'Hotline / Zalo: 0907.441.019  •  Giao hàng tận nơi', fontSize: 9, color: '#64748b', margin: [0, 2, 0, 0] }
-    ]
-  });
-  headerColumns.push({
-    width: 'auto',
-    alignment: 'right',
-    stack: [
-      { text: 'HÓA ĐƠN BÁN HÀNG', fontSize: 19, bold: true, color: '#2563eb' },
-      { text: `Mã hóa đơn: ${invoiceCode}`, fontSize: 10, bold: true, color: '#0f172a', margin: [0, 3, 0, 0] },
-      { text: `Ngày lập: ${orderDate}`, fontSize: 9, color: '#64748b', margin: [0, 2, 0, 0] }
+      { text: 'VỊ NGUYÊN FOOD (VIGEN FOOD)', fontSize: 11, bold: true, color: '#0f172a' },
+      { text: '🌾 Gạo sạch & Nông sản nguyên chất', fontSize: 8.5, color: '#15803d', margin: [0, 1, 0, 0] },
+      { text: '📞 Hotline / Zalo: 0706.839.434', fontSize: 8.5, color: '#334155', margin: [0, 1, 0, 0] },
+      { text: '📍 Đ/C: 185/17, Phạm Văn Chiêu, P.14, Gò Vấp, TP.HCM', fontSize: 7.5, color: '#64748b', margin: [0, 1, 0, 0] }
     ]
   });
 
-  const docDefinition = {
-    pageSize: 'A4',
-    pageMargins: [36, 36, 36, 36],
-    content: [
-      {
-        columns: headerColumns
+  // Tạo phần tử hiển thị mã QR (hỗ trợ cả SVG lẫn base64)
+  let qrElement = { text: '📱 Quét mã VietQR chuyển khoản nhanh', fontSize: 8.5, color: '#166534', alignment: 'center' };
+  if(qrVal && typeof qrVal === 'string'){
+    if(qrVal.includes('<svg')){
+      qrElement = { svg: qrVal, width: 88, height: 88, alignment: 'center', margin: [0, 3, 0, 3] };
+    } else if(qrVal.startsWith('data:')){
+      qrElement = { image: qrVal, fit: [88, 88], alignment: 'center', margin: [0, 3, 0, 3] };
+    }
+  }
+
+  const content = [
+    { columns: headerColumns },
+    { canvas: [{ type: 'line', x1: 0, y1: 5, x2: 372, y2: 5, lineWidth: 1.5, lineColor: '#0f172a' }] },
+    { text: '', margin: [0, 3, 0, 0] },
+    { text: `Mã đơn hàng: ${orderCode}`, fontSize: 8.5, bold: true, color: '#1e40af', alignment: 'center' },
+    { text: 'HÓA ĐƠN BÁN HÀNG', fontSize: 14.5, bold: true, color: '#0f172a', alignment: 'center', margin: [0, 1, 0, 5] },
+
+    // Khách hàng & NV tạo đơn (Card 2 hàng chuẩn đẹp)
+    {
+      table: {
+        widths: ['*'],
+        body: [
+          [
+            {
+              fillColor: '#f8fafc',
+              margin: [8, 4, 8, 4],
+              stack: [
+                {
+                  columns: [
+                    { text: [{ text: 'Khách hàng: ', color: '#64748b', fontSize: 8.5 }, { text: (c.name || 'Khách vãng lai') + (c.note ? ' (' + c.note + ')' : ''), bold: true, color: '#0f172a', fontSize: 8.5 }] },
+                    { text: [{ text: 'SĐT: ', color: '#64748b', fontSize: 8.5 }, { text: c.phone || '—', bold: true, color: '#2563eb', fontSize: 8.5 }], alignment: 'right' }
+                  ]
+                },
+                { text: '', margin: [0, 2, 0, 0] },
+                {
+                  columns: [
+                    { text: [{ text: 'Ngày đặt: ', color: '#64748b', fontSize: 8.5 }, { text: orderDateStr, bold: true, color: '#334155', fontSize: 8.5 }] },
+                    { text: [{ text: 'NV tạo đơn: ', color: '#64748b', fontSize: 8.5 }, { text: staffDisplay, bold: true, color: '#334155', fontSize: 8.5 }], alignment: 'right' }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
       },
-      { canvas: [{ type: 'line', x1: 0, y1: 14, x2: 523, y2: 14, lineWidth: 2, lineColor: '#0f172a' }] },
-      { text: '', margin: [0, 12, 0, 0] },
+      layout: {
+        hLineWidth: () => 0.8,
+        vLineWidth: () => 0.8,
+        hLineColor: () => '#e2e8f0',
+        vLineColor: () => '#e2e8f0'
+      }
+    },
+    { text: '', margin: [0, 5, 0, 0] },
+
+    // Header bảng sản phẩm: ĐG | SL | Thành tiền
+    {
+      table: {
+        widths: ['*', 45, 85],
+        body: [
+          [
+            { text: 'ĐƠN GIÁ (ĐG)', bold: true, fontSize: 8, color: '#334155', fillColor: '#f1f5f9', margin: [4, 3, 4, 3] },
+            { text: 'SL', bold: true, fontSize: 8, color: '#334155', alignment: 'center', fillColor: '#f1f5f9', margin: [4, 3, 4, 3] },
+            { text: 'THÀNH TIỀN', bold: true, fontSize: 8, color: '#334155', alignment: 'right', fillColor: '#f1f5f9', margin: [4, 3, 4, 3] }
+          ]
+        ]
+      },
+      layout: 'noBorders'
+    },
+
+    // Chi tiết sản phẩm
+    {
+      margin: [4, 3, 4, 2],
+      stack: [
+        { text: itemName, fontSize: 8.5, bold: true, color: '#0f172a' },
+        {
+          columns: [
+            { text: formatReceiptVND(unitPrice), fontSize: 8.5, color: '#64748b', width: '*' },
+            { text: String(qty), fontSize: 8.5, bold: true, alignment: 'center', color: '#0f172a', width: 45 },
+            { text: formatReceiptVND(subtotal), fontSize: 8.5, bold: true, alignment: 'right', color: '#0f172a', width: 85 }
+          ],
+          margin: [0, 2, 0, 0]
+        },
+        ...(combo && giftProduct && combo.giftQty ? [
+          { text: `🎁 Quà tặng kèm: ${giftProduct.name}`, fontSize: 8, bold: true, color: '#15803d', margin: [0, 2, 0, 0] },
+          {
+            columns: [
+              { text: '0₫', fontSize: 8, color: '#666666', width: '*' },
+              { text: `${combo.giftQty}`, fontSize: 8, bold: true, alignment: 'center', color: '#166534', width: 45 },
+              { text: '0₫ (Miễn phí)', fontSize: 8, bold: true, alignment: 'right', color: '#16a34a', width: 85 }
+            ]
+          }
+        ] : [])
+      ]
+    },
+
+    // Đường nét đứt
+    { canvas: [{ type: 'line', x1: 0, y1: 4, x2: 372, y2: 4, lineWidth: 0.8, dash: { length: 3, space: 2 }, lineColor: '#cbd5e1' }] },
+    { text: '', margin: [0, 3, 0, 0] },
+
+    // Giảm giá & Vận chuyển
+    {
+      columns: [
+        { text: 'Giảm giá đơn hàng:', fontSize: 8.5, color: '#334155' },
+        { text: discount > 0 ? '-' + formatReceiptVND(discount) : '0₫', fontSize: 8.5, bold: true, alignment: 'right', color: discount > 0 ? '#dc2626' : '#64748b' }
+      ]
+    },
+    {
+      columns: [
+        { text: 'Phí vận chuyển:', fontSize: 8.5, color: '#334155', margin: [0, 1, 0, 0] },
+        { text: '0₫ (Miễn phí)', fontSize: 8.5, bold: true, alignment: 'right', color: '#16a34a', margin: [0, 1, 0, 0] }
+      ]
+    },
+    {
+      columns: [
+        { text: 'Giảm giá vận chuyển:', fontSize: 8.5, color: '#334155', margin: [0, 1, 0, 0] },
+        { text: '0₫', fontSize: 8.5, alignment: 'right', color: '#64748b', margin: [0, 1, 0, 0] }
+      ]
+    },
+
+    // Đường kẻ đậm
+    { canvas: [{ type: 'line', x1: 0, y1: 5, x2: 372, y2: 5, lineWidth: 1.5, lineColor: '#0f172a' }] },
+    { text: '', margin: [0, 4, 0, 0] },
+
+    // THÀNH TIỀN
+    {
+      columns: [
+        { text: 'THÀNH TIỀN:', fontSize: 10, bold: true, color: '#0f172a' },
+        { text: formatReceiptVND(finalPrice), fontSize: 13, bold: true, color: '#1e40af', alignment: 'right' }
+      ]
+    },
+    { text: `(${docTien})`, fontSize: 7.5, italics: true, color: '#64748b', alignment: 'right', margin: [0, 1, 0, 0] },
+
+    // Đường nét đứt
+    { canvas: [{ type: 'line', x1: 0, y1: 5, x2: 372, y2: 5, lineWidth: 0.8, dash: { length: 3, space: 2 }, lineColor: '#cbd5e1' }] },
+    { text: '', margin: [0, 4, 0, 0] },
+
+    // Thanh toán
+    {
+      columns: [
+        { text: 'Khách đã thanh toán:', fontSize: 8.5, color: '#475569' },
+        { text: isPaid ? formatReceiptVND(finalPrice) : '0₫', fontSize: 8.5, bold: true, alignment: 'right', color: isPaid ? '#15803d' : '#64748b' }
+      ]
+    },
+    {
+      columns: [
+        { text: 'Khách còn phải trả:', fontSize: 9, bold: true, color: '#0f172a', margin: [0, 2, 0, 0] },
+        { text: isPaid ? '0₫ (Đã thanh toán)' : formatReceiptVND(finalPrice), fontSize: 9.5, bold: true, alignment: 'right', color: isPaid ? '#15803d' : '#dc2626', margin: [0, 2, 0, 0] }
+      ]
+    },
+
+    // Khối VietQR (Đảm bảo luôn luôn hiển thị đầy đủ, sắc nét)
+    ...(!isPaid && finalPrice > 0 ? [
+      { text: '', margin: [0, 6, 0, 0] },
       {
         table: {
-          widths: ['52%', '48%'],
+          widths: ['*'],
           body: [
             [
               {
                 fillColor: '#f8fafc',
-                margin: [10, 8, 10, 8],
+                margin: [6, 5, 6, 5],
                 stack: [
-                  { text: 'KHÁCH HÀNG (NGƯỜI NHẬN)', fontSize: 8, bold: true, color: '#64748b' },
-                  { text: c.name || 'Khách vãng lai', fontSize: 13, bold: true, color: '#0f172a', margin: [0, 4, 0, 0] },
-                  {
-                    columns: [
-                      { text: 'SĐT:', fontSize: 10, bold: true, color: '#1d4ed8', width: 35 },
-                      { text: c.phone || '—', fontSize: 10, bold: true, color: '#1d4ed8' }
-                    ],
-                    margin: [0, 3, 0, 0]
-                  },
-                  { text: `Địa chỉ: ${c.address || 'Tại cửa hàng'}`, fontSize: 9.5, color: '#334155', margin: [0, 3, 0, 0] }
-                ]
-              },
-              {
-                fillColor: '#f8fafc',
-                margin: [10, 8, 10, 8],
-                stack: [
-                  { text: 'THÔNG TIN ĐƠN HÀNG', fontSize: 8, bold: true, color: '#64748b' },
-                  { text: `Nhân viên tư vấn: ${staffName}`, fontSize: 9.5, color: '#334155', margin: [0, 4, 0, 0] },
-                  { text: `Ngày giao dự kiến: ${c.deliveryDate ? formatDateVN(c.deliveryDate) : 'Giao ngay'}`, fontSize: 9.5, color: '#334155', margin: [0, 3, 0, 0] },
-                  { text: `Ghi chú: ${c.note || 'Không có'}`, fontSize: 9.5, italics: true, color: '#64748b', margin: [0, 3, 0, 0] }
+                  { text: '📱 QUÉT MÃ VIETQR ĐỂ THANH TOÁN', fontSize: 8, bold: true, color: '#166534', alignment: 'center' },
+                  qrElement,
+                  { text: 'Ngân hàng: MB Bank • STK: 0939803856', fontSize: 7.5, color: '#475569', alignment: 'center' },
+                  { text: 'Chủ TK: NGUYEN AI THI • Nội dung: ' + orderCode, fontSize: 7.5, bold: true, color: '#1e40af', alignment: 'center', margin: [0, 1, 0, 0] }
                 ]
               }
             ]
           ]
         },
         layout: {
-          hLineWidth: () => 1,
-          vLineWidth: () => 1,
+          hLineWidth: () => 0.8,
+          vLineWidth: () => 0.8,
           hLineColor: () => '#cbd5e1',
           vLineColor: () => '#cbd5e1'
         }
-      },
-      { text: '', margin: [0, 12, 0, 0] },
-      {
-        table: {
-          headerRows: 1,
-          widths: [32, '*', 45, 55, 80, 90],
-          body: tableBody
-        },
-        layout: {
-          hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length) ? 2 : 0.5,
-          vLineWidth: () => 0,
-          hLineColor: (i, node) => (i === 0 || i === 1 || i === node.table.body.length) ? '#0f172a' : '#cbd5e1'
-        }
-      },
-      { text: '', margin: [0, 14, 0, 0] },
-      {
-        columns: [
-          {
-            width: '52%',
-            stack: [
-              { text: 'Trạng thái thanh toán:', fontSize: 9.5, bold: true, color: '#0f172a' },
-              {
-                margin: [0, 4, 0, 0],
-                table: {
-                  body: [[
-                    isPaid
-                      ? {
-                          text: '● ĐÃ THANH TOÁN ĐỦ',
-                          bold: true,
-                          fontSize: 9,
-                          color: '#15803d',
-                          fillColor: '#dcfce7',
-                          margin: [8, 4, 8, 4]
-                        }
-                      : {
-                          text: '● CHƯA THANH TOÁN (CÔNG NỢ)',
-                          bold: true,
-                          fontSize: 9,
-                          color: '#9a3412',
-                          fillColor: '#fef3c7',
-                          margin: [8, 4, 8, 4]
-                        }
-                  ]]
-                },
-                layout: {
-                  hLineWidth: () => 1,
-                  vLineWidth: () => 1,
-                  hLineColor: () => isPaid ? '#22c55e' : '#f59e0b',
-                  vLineColor: () => isPaid ? '#22c55e' : '#f59e0b'
-                }
-              },
-              { text: '* Quý khách vui lòng kiểm tra kỹ số lượng và chất lượng sản phẩm trước khi nhận hàng.', fontSize: 8, color: '#64748b', margin: [0, 8, 0, 0] }
-            ]
-          },
-          {
-            width: '48%',
-            stack: [
-              {
-                columns: [
-                  { text: 'Tổng tiền hàng:', fontSize: 10, color: '#475569' },
-                  { text: formatVND(c.price || 0), fontSize: 10, bold: true, color: '#0f172a', alignment: 'right' }
-                ]
-              },
-              {
-                columns: [
-                  { text: 'Phí vận chuyển:', fontSize: 10, color: '#475569', margin: [0, 4, 0, 0] },
-                  { text: 'Miễn phí (0đ)', fontSize: 10, bold: true, color: '#059669', alignment: 'right', margin: [0, 4, 0, 0] }
-                ]
-              },
-              { canvas: [{ type: 'line', x1: 0, y1: 8, x2: 245, y2: 8, lineWidth: 2, lineColor: '#2563eb' }] },
-              {
-                columns: [
-                  { text: 'TỔNG CỘNG:', fontSize: 14, bold: true, color: '#1d4ed8', margin: [0, 10, 0, 0] },
-                  { text: formatVND(c.price || 0), fontSize: 14, bold: true, color: '#1d4ed8', alignment: 'right', margin: [0, 10, 0, 0] }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      { text: '', margin: [0, 24, 0, 0] },
-      {
-        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 523, y2: 0, lineWidth: 0.5, lineColor: '#e2e8f0' }]
-      },
-      {
-        text: 'Vị Nguyên Food chân thành cảm ơn Quý khách! Kính chúc Quý khách bữa cơm ngon miệng và nhiều sức khỏe!',
-        fontSize: 9,
-        italics: true,
-        color: '#64748b',
-        alignment: 'center',
-        margin: [0, 10, 0, 0]
       }
-    ],
+    ] : (isPaid ? [
+      { text: '', margin: [0, 6, 0, 0] },
+      { text: '✅ ĐƠN HÀNG ĐÃ THANH TOÁN THÀNH CÔNG', fontSize: 8.5, bold: true, color: '#15803d', alignment: 'center' }
+    ] : [])),
+
+    // Lời cảm ơn
+    { canvas: [{ type: 'line', x1: 0, y1: 5, x2: 372, y2: 5, lineWidth: 0.6, dash: { length: 2, space: 2 }, lineColor: '#cbd5e1' }] },
+    { text: '🙏 Cảm ơn Quý khách đã tin tưởng và đồng hành cùng Vị Nguyên Food!', fontSize: 7.5, color: '#64748b', alignment: 'center', margin: [0, 3, 0, 0] },
+    { text: 'Hóa đơn bán hàng điện tử • In & phát hành tự động', fontSize: 6.5, color: '#94a3b8', alignment: 'center', margin: [0, 1, 0, 0] }
+  ];
+
+  const docDefinition = {
+    pageSize: 'A5',
+    pageMargins: [24, 14, 24, 14],
+    content,
     defaultStyle: {
       font: 'Roboto',
-      fontSize: 9.5
+      fontSize: 8.5
     }
   };
 
   try {
     window.pdfMake.createPdf(docDefinition).download(filename);
     if(typeof appAlert === 'function') {
-      appAlert(`Đã xuất và tải file PDF "${filename}" về máy thành công!`, {type:'info', title:'Xuất file PDF'});
+      appAlert(`Đã xuất file PDF "${filename}" thành công!`, {type:'success', title:'Xuất file PDF'});
     }
   } catch(e) {
     console.error('pdfMake download error:', e);
-    openPrintWindow(c, { includeSignatures: false, isExport: true });
+    openPrintWindow(c, { isExport: true });
   }
 }
 
@@ -2187,8 +2443,12 @@ async function exportPdf(c){
   const btn = document.getElementById('exportPdfBtnBottom');
   const origHtml = btn ? btn.innerHTML : '';
   if(btn) btn.innerHTML = '⏳ Đang tạo file PDF...';
+
   try {
     await generatePdfWithPdfMake(c);
+  } catch (err) {
+    console.error('exportPdf error:', err);
+    openPrintWindow(c, { isExport: true });
   } finally {
     if(btn) btn.innerHTML = origHtml;
   }
@@ -2271,12 +2531,12 @@ function resetCustomerForm(){
   document.getElementById('cKgCustom').value='';
   document.getElementById('cKgCustom').style.display='none';
   document.getElementById('cPrice').value='';
-  document.getElementById('cPaymentStatus').value='da_tra';
+  document.getElementById('cPaymentStatus').value = pendingCustomerStage === 'cskh' ? 'chua_tra' : 'da_tra';
   populateProductSelects();
   document.getElementById('cProduct').value='';
   document.getElementById('cCombo').value='';
   applyComboToCustomerForm();
-  document.getElementById('custFormTitle').textContent = '👤 Thêm khách hàng';
+  document.getElementById('custFormTitle').textContent = pendingCustomerStage === 'cskh' ? '💳 Thêm công nợ' : '👤 Thêm khách hàng';
   document.getElementById('addCustomerBtn').textContent = 'Lưu khách hàng';
   document.getElementById('cancelEditBtn').style.display = 'inline-flex';
 }
@@ -2472,7 +2732,17 @@ async function deleteCombo(id){
 }
 
 async function togglePaymentStatus(id){
-  try{ await CrmApi.customers.togglePayment(id); await loadAllData(); }
+  try{
+    const prev = customers.find(x=>x.id===id);
+    const wasUnpaid = prev && prev.paymentStatus === 'chua_tra';
+    await CrmApi.customers.togglePayment(id);
+    await loadAllData();
+    if(wasUnpaid){
+      appAlert(`Đã thu tiền khách hàng "${prev ? prev.name : id}".\n\nKhách hàng đã tự động chuyển sang mục "Khách hàng".`, {type:'success', title:'✅ Đã thanh toán'});
+    } else if(prev){
+      appAlert(`Đã chuyển khách hàng "${prev.name}" sang mục "Danh sách công nợ".`, {type:'info', title:'🕒 Ghi nhận công nợ'});
+    }
+  }
   catch(err){ appAlert(err.message, {type:'danger', title:'Lỗi'}); }
 }
 
@@ -2638,10 +2908,11 @@ document.getElementById('addCustomerBtn').addEventListener('click', async ()=>{
   };
 
   try{
+    let savedRecord = null;
     if(editingCustomerId){
-      await CrmApi.customers.update(editingCustomerId, payload);
+      savedRecord = await CrmApi.customers.update(editingCustomerId, payload);
     } else {
-      await CrmApi.customers.create(payload);
+      savedRecord = await CrmApi.customers.create(payload);
     }
   } catch(err){
     appAlert(err.message, {type:'danger', title:'Lỗi lưu khách hàng'});
@@ -2741,15 +3012,36 @@ document.getElementById('cancelEditBtn').addEventListener('click', closeCustomer
 document.getElementById('custSearch').addEventListener('input', ()=>{ paginationState.order = 1; render(); });
 document.getElementById('custFilterType').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
 document.getElementById('custFilterStaff').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
-document.getElementById('custFilterPayment').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
+const custFilterPayEl = document.getElementById('custFilterPayment');
+if(custFilterPayEl) custFilterPayEl.addEventListener('change', ()=>{ paginationState.order = 1; render(); });
 document.getElementById('custFilterPacked').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
 document.getElementById('custFilterDelivered').addEventListener('change', ()=>{ paginationState.order = 1; render(); });
 document.getElementById('cskhSearch').addEventListener('input', ()=>{ paginationState.cskh = 1; render(); });
-document.getElementById('cskhFilterType').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
-document.getElementById('cskhFilterStaff').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
-document.getElementById('cskhFilterPayment').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
-document.getElementById('cskhFilterPacked').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
-document.getElementById('cskhFilterDelivered').addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+
+const cskhFromDateEl = document.getElementById('cskhFromDate');
+if(cskhFromDateEl) cskhFromDateEl.addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+
+const cskhToDateEl = document.getElementById('cskhToDate');
+if(cskhToDateEl) cskhToDateEl.addEventListener('change', ()=>{ paginationState.cskh = 1; render(); });
+
+const cskhTodayBtn = document.getElementById('cskhTodayBtn');
+if(cskhTodayBtn) cskhTodayBtn.addEventListener('click', ()=>{
+  const todayKey = dateKeyFromTimestamp(Date.now());
+  if(cskhFromDateEl) cskhFromDateEl.value = todayKey;
+  if(cskhToDateEl) cskhToDateEl.value = todayKey;
+  paginationState.cskh = 1;
+  render();
+});
+
+const cskhClearDateBtn = document.getElementById('cskhClearDateBtn');
+if(cskhClearDateBtn) cskhClearDateBtn.addEventListener('click', ()=>{
+  if(cskhFromDateEl) cskhFromDateEl.value = '';
+  if(cskhToDateEl) cskhToDateEl.value = '';
+  const searchInput = document.getElementById('cskhSearch');
+  if(searchInput) searchInput.value = '';
+  paginationState.cskh = 1;
+  render();
+});
 
 document.getElementById('orderSearch').addEventListener('input', ()=>{ paginationState.orders = 1; render(); });
 document.getElementById('orderFilterStaff').addEventListener('change', ()=>{ paginationState.orders = 1; render(); });
@@ -3024,6 +3316,7 @@ function populateCustFilterStaff(){
 
 function populateStaffFilterSelect(selectId){
   const sel = document.getElementById(selectId);
+  if(!sel) return;
   const isAdmin = currentUser && currentUser.role === 'admin';
   if(isAdmin){
     sel.innerHTML = `<option value="">Tất cả nhân viên</option>` +
@@ -3268,6 +3561,9 @@ if(document.getElementById('closeInvoiceModal')){
 if(document.getElementById('closeInvoiceBtn')){
   document.getElementById('closeInvoiceBtn').addEventListener('click', closeInvoiceModal);
 }
+if(document.getElementById('invoiceCheckPaymentBtn')){
+  document.getElementById('invoiceCheckPaymentBtn').addEventListener('click', checkInvoicePaymentManual);
+}
 // Nút in hóa đơn ra giấy (có chữ ký)
 if(document.getElementById('printInvoiceBtn')){
   document.getElementById('printInvoiceBtn').addEventListener('click', ()=> printInvoice(currentInvoiceCustomer));
@@ -3300,3 +3596,179 @@ if(document.getElementById('invoiceModalOverlay')){
     if(e.target.id === 'invoiceModalOverlay') closeInvoiceModal();
   });
 }
+
+/* ==========================================================================
+   KHỞI TẠO VÀ XỬ LÝ TRỢ LÝ AI (AI COPILOT)
+   ========================================================================== */
+const aiChatHistory = [];
+
+function initAiChat() {
+  const bubble = document.getElementById('aiChatBubble');
+  const win = document.getElementById('aiChatWindow');
+  const closeBtn = document.getElementById('aiCloseBtn');
+  const settingsBtn = document.getElementById('aiSettingsBtn');
+  const settingsPanel = document.getElementById('aiSettingsPanel');
+  const apiKeyInput = document.getElementById('aiApiKeyInput');
+  const saveKeyBtn = document.getElementById('aiSaveKeyBtn');
+  const clearKeyBtn = document.getElementById('aiClearKeyBtn');
+  const messagesEl = document.getElementById('aiChatMessages');
+  const inputEl = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiSendBtn');
+  const chipsContainer = document.getElementById('aiQuickChips');
+
+  if (!bubble || !win) return;
+
+  // Tải API Key đã lưu (nếu có)
+  const savedKey = localStorage.getItem('vigen_gemini_api_key') || '';
+  if (apiKeyInput) apiKeyInput.value = savedKey;
+
+  // Mở / Đóng chat window
+  bubble.addEventListener('click', () => {
+    win.classList.toggle('active');
+    if (win.classList.contains('active') && inputEl) {
+      inputEl.focus();
+    }
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      win.classList.remove('active');
+    });
+  }
+
+  // Mở / Đóng Settings Panel
+  if (settingsBtn && settingsPanel) {
+    settingsBtn.addEventListener('click', () => {
+      settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+
+  // Lưu Key
+  if (saveKeyBtn && apiKeyInput) {
+    saveKeyBtn.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem('vigen_gemini_api_key', key);
+        appAlert('Đã lưu API Key AI thành công!', { type: 'success', title: '⚙️ Cài đặt AI' });
+      } else {
+        localStorage.removeItem('vigen_gemini_api_key');
+        appAlert('Đã xóa API Key.', { type: 'info', title: '⚙️ Cài đặt AI' });
+      }
+      if (settingsPanel) settingsPanel.style.display = 'none';
+    });
+  }
+
+  if (clearKeyBtn && apiKeyInput) {
+    clearKeyBtn.addEventListener('click', () => {
+      apiKeyInput.value = '';
+      localStorage.removeItem('vigen_gemini_api_key');
+      appAlert('Đã xóa API Key.', { type: 'info', title: '⚙️ Cài đặt AI' });
+      if (settingsPanel) settingsPanel.style.display = 'none';
+    });
+  }
+
+  // Gợi ý nhanh (Quick chips)
+  if (chipsContainer) {
+    chipsContainer.querySelectorAll('.ai-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const prompt = chip.dataset.prompt;
+        if (prompt) {
+          sendUserMessage(prompt);
+        }
+      });
+    });
+  }
+
+  // Gửi tin nhắn
+  function sendUserMessage(text) {
+    const msg = (text || (inputEl ? inputEl.value : '') || '').trim();
+    if (!msg) return;
+
+    if (inputEl) inputEl.value = '';
+
+    // Append tin nhắn User
+    appendAiMessage('user', msg);
+    aiChatHistory.push({ role: 'user', content: msg });
+
+    // Hiển thị typing indicator
+    const typingEl = showTypingIndicator();
+
+    if (sendBtn) sendBtn.disabled = true;
+
+    const apiKey = localStorage.getItem('vigen_gemini_api_key') || undefined;
+
+    CrmApi.ai.chat({ message: msg, history: aiChatHistory, apiKey })
+      .then(res => {
+        removeTypingIndicator(typingEl);
+        if (sendBtn) sendBtn.disabled = false;
+        const reply = res.reply || 'Xin lỗi, tôi chưa hiểu ý bạn.';
+        appendAiMessage('bot', reply);
+        aiChatHistory.push({ role: 'model', content: reply });
+      })
+      .catch(err => {
+        removeTypingIndicator(typingEl);
+        if (sendBtn) sendBtn.disabled = false;
+        appendAiMessage('bot', `⚠️ Lỗi: Không thể kết nối tới máy chủ AI (${err.message || 'Lỗi mạng'}).`);
+      });
+  }
+
+  if (sendBtn) {
+    sendBtn.addEventListener('click', () => sendUserMessage());
+  }
+
+  if (inputEl) {
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendUserMessage();
+      }
+    });
+  }
+
+  function appendAiMessage(role, text) {
+    if (!messagesEl) return;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `ai-msg ai-msg-${role}`;
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'ai-msg-bubble';
+
+    // Format markdown đơn giản: **bold**, *italic*, \n
+    let formatted = escapeHtml(text)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+
+    bubbleDiv.innerHTML = formatted;
+    msgDiv.appendChild(bubbleDiv);
+    messagesEl.appendChild(msgDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function showTypingIndicator() {
+    if (!messagesEl) return null;
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'ai-msg ai-msg-bot';
+    typingDiv.id = 'aiTypingIndicator';
+    typingDiv.innerHTML = `
+      <div class="ai-msg-bubble" style="padding:8px 12px;">
+        <div class="ai-typing-indicator">
+          <span class="ai-typing-dot"></span>
+          <span class="ai-typing-dot"></span>
+          <span class="ai-typing-dot"></span>
+        </div>
+      </div>
+    `;
+    messagesEl.appendChild(typingDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return typingDiv;
+  }
+
+  function removeTypingIndicator(el) {
+    if (el && el.parentNode) {
+      el.parentNode.removeChild(el);
+    }
+  }
+}
+
+// Khởi chạy Trợ lý AI ngay khi tải xong
+initAiChat();

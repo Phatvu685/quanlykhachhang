@@ -81,7 +81,7 @@ const bodyMarkup = `
       </div>
       <div class="stats">
         <div class="stat"><div class="num" id="statTotal">0</div><div class="lbl">Tổng khách</div></div>
-        <div class="stat"><div class="num" id="statCskh">0</div><div class="lbl">Đang CSKH</div></div>
+        <div class="stat"><div class="num" id="statCskh">0</div><div class="lbl">Công nợ</div></div>
         <div class="stat"><div class="num" id="statOld">0</div><div class="lbl">Khách cũ</div></div>
         <div class="stat"><div class="num" id="statLead">0</div><div class="lbl">Tiềm năng</div></div>
       </div>
@@ -91,7 +91,7 @@ const bodyMarkup = `
   <div class="tabs">
     <div class="tab active" data-view="customers">👤 Khách hàng</div>
     <div class="tab" data-view="orders" id="ordersTab">🧾 Đơn hàng</div>
-    <div class="tab" data-view="cskh" id="cskhTab">🤝 Chăm sóc khách hàng</div>
+    <div class="tab" data-view="cskh" id="cskhTab">💳 Danh sách công nợ</div>
     <div class="tab" data-view="combos" id="combosTab">🎁 Combo ưu đãi</div>
     <div class="tab" data-view="warehouse" id="warehouseTab">📦 Kho hàng</div>
     <div class="tab" data-view="cashflow" id="cashflowTab">💰 Dòng tiền</div>
@@ -101,7 +101,7 @@ const bodyMarkup = `
 
   <div class="view active" id="view-customers">
   <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
-    <h2 style="margin:0;">Danh sách khách hàng — đã phát sinh đơn</h2>
+    <h2 style="margin:0;">Danh sách khách hàng — Đã thanh toán</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button class="btn btn-secondary export-btn" id="exportFullJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
       <button class="btn" id="openAddCustomerBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khách hàng</button>
@@ -124,11 +124,7 @@ const bodyMarkup = `
           <option value="tan_phat">Tấn Phát</option>
           <option value="none">Chưa phân công</option>
         </select>
-        <select id="custFilterPayment" style="min-width:125px;">
-          <option value="">Tất cả trạng thái</option>
-          <option value="da_tra">✅ Đã thu</option>
-          <option value="chua_tra">🕒 Công nợ</option>
-        </select>
+        <input type="hidden" id="custFilterPayment" value="">
         <select id="custFilterPacked" style="min-width:125px;">
           <option value="">Đóng hàng: tất cả</option>
           <option value="da">📦 Đã đóng hàng</option>
@@ -199,44 +195,21 @@ const bodyMarkup = `
 
   <div class="view" id="view-cskh">
   <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
-    <h2 style="margin:0;">Chăm sóc khách hàng — chưa phát sinh đơn</h2>
+    <h2 style="margin:0;">💳 Danh sách công nợ — Khách hàng chưa thanh toán</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button class="btn btn-secondary export-btn" id="exportCskhJsonBtn" type="button" style="margin:0;width:auto;padding:10px 16px;">📤 Xuất JSON</button>
-      <button class="btn" id="openAddCskhBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm khách hàng CSKH</button>
+      <button class="btn" id="openAddCskhBtn" style="margin:0;width:auto;padding:10px 20px;">+ Thêm công nợ</button>
     </div>
   </div>
   <div class="card">
-      <div class="toolbar">
-        <input id="cskhSearch" placeholder="🔍 Tìm theo tên hoặc SĐT..." style="min-width:200px;">
-        <select id="cskhFilterType" style="min-width:125px;">
-          <option value="">Tất cả phân loại</option>
-          <option value="moi">Khách mới</option>
-          <option value="cu">Khách cũ</option>
-          <option value="tiemnang">Khách tiềm năng</option>
-        </select>
-        <select id="cskhFilterStaff" style="min-width:125px;">
-          <option value="">Tất cả nhân viên</option>
-          <option value="hai_em">Hải Em</option>
-          <option value="ngoc_thuong">Ngọc Thương</option>
-          <option value="ai_thi">Ái Thi</option>
-          <option value="tan_phat">Tấn Phát</option>
-          <option value="none">Chưa phân công</option>
-        </select>
-        <select id="cskhFilterPayment" style="min-width:125px;">
-          <option value="">Tất cả trạng thái</option>
-          <option value="da_tra">✅ Đã thu</option>
-          <option value="chua_tra">🕒 Công nợ</option>
-        </select>
-        <select id="cskhFilterPacked" style="min-width:125px;">
-          <option value="">Đóng hàng: tất cả</option>
-          <option value="da">📦 Đã đóng hàng</option>
-          <option value="chua">🧺 Chưa đóng hàng</option>
-        </select>
-        <select id="cskhFilterDelivered" style="min-width:125px;">
-          <option value="">Giao hàng: tất cả</option>
-          <option value="da">🚚 Đã giao hàng</option>
-          <option value="chua">🕓 Chưa giao hàng</option>
-        </select>
+      <div class="toolbar" style="flex-wrap:wrap;gap:10px;align-items:center;">
+        <input id="cskhSearch" placeholder="🔍 Tìm theo tên hoặc SĐT..." style="min-width:240px;flex:1;">
+        <label style="font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600;">Từ ngày</label>
+        <input type="date" id="cskhFromDate" style="width:auto;">
+        <label style="font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600;">Đến ngày</label>
+        <input type="date" id="cskhToDate" style="width:auto;">
+        <button class="btn btn-secondary" id="cskhTodayBtn" type="button" style="width:auto;padding:8px 16px;">📅 Hôm nay</button>
+        <button class="btn btn-secondary" id="cskhClearDateBtn" type="button" style="width:auto;padding:8px 16px;">Xóa lọc</button>
       </div>
       <div class="count" id="cskhCount"></div>
       <div id="cskhTableHolder"></div>
@@ -284,7 +257,7 @@ const bodyMarkup = `
           <input id="cAddress" placeholder="VD: 12 Lê Lợi, Q1, TP.HCM">
 
           <div class="field-row">
-            <div>
+            <div style="flex:1;">
               <label for="cType">Phân loại khách</label>
               <select id="cType">
                 <option value="moi">Khách mới</option>
@@ -292,11 +265,11 @@ const bodyMarkup = `
                 <option value="tiemnang">Khách tiềm năng</option>
               </select>
             </div>
-            <div>
+            <div style="display:none;">
               <label for="cStage">Giai đoạn</label>
               <select id="cStage">
-                <option value="cskh">🤝 Đang chăm sóc</option>
-                <option value="order">✅ Đã phát sinh đơn</option>
+                <option value="order" selected>✅ Đơn hàng</option>
+                <option value="cskh">💳 Công nợ</option>
               </select>
             </div>
           </div>
@@ -367,8 +340,8 @@ const bodyMarkup = `
               <div>
                 <label for="cPaymentStatus">Thanh toán</label>
                 <select id="cPaymentStatus">
-                  <option value="da_tra">✅ Đã thu (trả liền)</option>
-                  <option value="chua_tra">🕒 Công nợ</option>
+                  <option value="da_tra">✅ Đã thu tiền (vào Khách hàng)</option>
+                  <option value="chua_tra">🕒 Công nợ (vào Danh sách công nợ)</option>
                 </select>
               </div>
               <div>
@@ -865,6 +838,68 @@ const bodyMarkup = `
     </div>
   </div>
 
+</div>
+
+<!-- NÚT NỔI VÀ KHUNG CHAT TRỢ LÝ AI (AI COPILOT) -->
+<button class="ai-chat-bubble" id="aiChatBubble" title="Mở Trợ lý AI Vị Nguyên Food" type="button">
+  <span class="ai-bubble-icon">🤖</span>
+  <span class="ai-bubble-label">Trợ lý AI</span>
+  <span class="ai-pulse-dot"></span>
+</button>
+
+<div class="ai-chat-window" id="aiChatWindow">
+  <div class="ai-chat-header">
+    <div class="ai-header-info">
+      <div class="ai-avatar">🤖</div>
+      <div>
+        <div class="ai-header-title">Trợ lý AI — Vị Nguyên Food</div>
+        <div class="ai-header-status"><span class="ai-status-indicator"></span> Trực tuyến • Sẵn sàng hỗ trợ</div>
+      </div>
+    </div>
+    <div class="ai-header-actions">
+      <button class="ai-action-btn" id="aiSettingsBtn" title="Cài đặt Gemini API Key" type="button">⚙️</button>
+      <button class="ai-action-btn" id="aiCloseBtn" title="Thu nhỏ" type="button">✕</button>
+    </div>
+  </div>
+
+  <!-- BẢNG CÀI ĐẶT API KEY -->
+  <div class="ai-settings-panel" id="aiSettingsPanel" style="display:none;">
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#1e293b;">⚙️ Cấu hình API Key Trợ lý AI</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:8px;line-height:1.5;">
+      Hệ thống hỗ trợ <strong>DeepSeek</strong>, <strong>Groq (Miễn phí 100%)</strong>, <strong>Google Gemini</strong>:<br>
+      • <a href="https://console.groq.com/keys" target="_blank" style="color:#16a34a;font-weight:700;text-decoration:underline;">Groq (Llama-3.3-70B Miễn phí 100% không cần thẻ) ↗</a><br>
+      • <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:#2563eb;text-decoration:underline;">DeepSeek (sk-...) ↗</a> | <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#2563eb;text-decoration:underline;">Google Gemini ↗</a>
+    </div>
+    <input type="password" id="aiApiKeyInput" placeholder="Dán API Key tại đây (sk-..., gsk_..., AIzaSy...)" style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:8px;box-sizing:border-box;">
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-secondary" id="aiClearKeyBtn" type="button" style="padding:4px 10px;font-size:12px;width:auto;">Xóa Key</button>
+      <button class="btn" id="aiSaveKeyBtn" type="button" style="padding:4px 12px;font-size:12px;width:auto;background:#2563eb;">Lưu cài đặt</button>
+    </div>
+  </div>
+
+  <!-- VÙNG TIN NHẮN -->
+  <div class="ai-chat-messages" id="aiChatMessages">
+    <div class="ai-msg ai-msg-bot">
+      <div class="ai-msg-bubble">
+        👋 Xin chào! Tôi đã được nạp <strong>toàn bộ 100% dữ liệu thực tế của dự án Vị Nguyên Food</strong> (tất cả khách hàng, mọi đơn hàng, công nợ, sổ kho, dòng tiền và nhân viên).<br><br>
+        Bạn có thể hỏi tôi <strong>bất kỳ câu hỏi tự do nào</strong> — tôi sẽ tự động đối chiếu, tra cứu dữ liệu thật và trả lời ngay lập tức!
+      </div>
+    </div>
+  </div>
+
+  <!-- GỢI Ý CÂU HỎI NHANH (QUICK CHIPS) -->
+  <div class="ai-quick-chips" id="aiQuickChips">
+    <button class="ai-chip" type="button" data-prompt="Tình hình công nợ hiện tại thế nào?">💰 Kiểm tra công nợ</button>
+    <button class="ai-chip" type="button" data-prompt="Đơn hàng và doanh số hôm nay thế nào?">📦 Đơn hàng hôm nay</button>
+    <button class="ai-chip" type="button" data-prompt="Soạn cho tôi tin nhắn nhắc nợ khách hàng lịch sự gửi qua Zalo">✍️ Soạn tin nhắc nợ</button>
+    <button class="ai-chip" type="button" data-prompt="Bảng giá các loại gạo hiện tại là bao nhiêu?">🌾 Báo giá gạo</button>
+  </div>
+
+  <!-- KHUNG NHẬP TIN NHẮN -->
+  <div class="ai-chat-footer">
+    <input type="text" id="aiChatInput" placeholder="Hỏi bất kỳ điều gì về khách hàng, công nợ, kho, doanh số..." autocomplete="off">
+    <button id="aiSendBtn" type="button" title="Gửi tin nhắn">➤</button>
+  </div>
 </div>
 
 `;

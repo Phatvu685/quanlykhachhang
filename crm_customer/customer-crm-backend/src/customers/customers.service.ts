@@ -385,8 +385,8 @@ export class CustomersService {
     const scope: Prisma.CustomerWhereInput =
       user.role === 'admin' ? {} : { staffUserId: user.userId };
     const [total, cskh, old, lead] = await Promise.all([
-      this.prisma.customer.count({ where: scope }),
-      this.prisma.customer.count({ where: { ...scope, stage: 'cskh' } }),
+      this.prisma.customer.count({ where: { ...scope, paymentStatus: 'da_tra' } }),
+      this.prisma.customer.count({ where: { ...scope, paymentStatus: 'chua_tra' } }),
       this.prisma.customer.count({ where: { ...scope, type: 'cu' } }),
       this.prisma.customer.count({ where: { ...scope, type: 'tiemnang' } }),
     ]);

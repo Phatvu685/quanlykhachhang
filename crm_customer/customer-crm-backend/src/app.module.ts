@@ -17,6 +17,8 @@ import { StockEntriesModule } from './stock-entries/stock-entries.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { SocialAccountsModule } from './social-accounts/social-accounts.module';
 import { DataImportModule } from './data-import/data-import.module';
+import { PaymentsModule } from './payments/payments.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { DataImportModule } from './data-import/data-import.module';
     ExpensesModule, // sổ dòng tiền
     SocialAccountsModule, // tài khoản MXH chăm sóc khách hàng
     DataImportModule, // nhập & xuất dữ liệu JSON
+    PaymentsModule, // thanh toán online VietQR & webhook ngân hàng
+    AiModule, // Trợ lý AI chatbot thông minh cho CRM
   ],
   controllers: [AppController],
   providers: [AppService],

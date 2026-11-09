@@ -30,3 +30,6 @@ prisma/*.db-journal
 
 # Build artifacts
 *.tsbuildinfo
+
+# Backups
+customer-crm-backend/backups/
