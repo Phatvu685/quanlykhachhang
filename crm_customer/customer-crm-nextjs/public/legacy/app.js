@@ -3618,7 +3618,7 @@ function initAiChat() {
 
   if (!bubble || !win) return;
 
-  // Tải API Key đã lưu (nếu có)
+  // Tải API Key đã lưu trong trình duyệt (nếu có)
   const savedKey = localStorage.getItem('vigen_gemini_api_key') || '';
   if (apiKeyInput) apiKeyInput.value = savedKey;
 

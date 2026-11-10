@@ -51,8 +51,8 @@ export class AiService {
         return { reply, source: 'groq' };
       }
 
-      // TH 2: Google Gemini (bắt đầu bằng AIzaSy)
-      if (apiKey.startsWith('AIzaSy')) {
+      // TH 2: Google Gemini (bắt đầu bằng AIzaSy hoặc AQ.)
+      if (apiKey.startsWith('AIzaSy') || apiKey.startsWith('AQ.')) {
         this.logger.log('Routing to Google Gemini API...');
         const reply = await this.callGeminiApi(apiKey, dto, fullContext);
         return { reply, source: 'gemini' };
@@ -353,11 +353,10 @@ ${JSON.stringify(context.recentExpenses, null, 1)}
    */
   private async getCandidateModels(apiKey: string): Promise<string[]> {
     const priorityList = [
-      'gemini-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-2.0-flash',
+      'gemini-3.5-flash',
       'gemini-flash-lite-latest',
-      'gemini-pro-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
     ];
 
     try {
@@ -369,7 +368,18 @@ ${JSON.stringify(context.recentExpenses, null, 1)}
         const available: string[] = (data.models || [])
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
           .map((m: any) => m.name.replace(/^models\//, ''))
-          .filter((name: string) => !name.includes('preview') && name !== 'gemini-2.5-flash');
+          .filter(
+            (name: string) =>
+              !name.includes('tts') &&
+              !name.includes('image') &&
+              !name.includes('transcribe') &&
+              !name.includes('embedding') &&
+              !name.includes('robotics') &&
+              !name.includes('computer-use') &&
+              name !== 'gemini-2.5-flash' &&
+              name !== 'gemini-2.0-flash' &&
+              name !== 'gemini-1.5-flash',
+          );
 
         const matched = priorityList.filter((p) => available.includes(p));
         if (matched.length > 0) {
